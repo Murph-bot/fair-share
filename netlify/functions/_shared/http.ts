@@ -50,7 +50,7 @@ export async function readJsonBody(req: Request): Promise<unknown> {
 }
 
 export function pinPepper(): string {
-  const value = Netlify.env.get("PHOTO_PIN_PEPPER");
+  const value = Netlify.env.get("PHOTO_PIN_PEPPER") ?? process.env.PHOTO_PIN_PEPPER;
   if (!value) {
     throw new ValidationError("Photo PIN is not configured");
   }
