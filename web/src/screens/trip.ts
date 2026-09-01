@@ -1,4 +1,4 @@
-import { fetchTrip, saveTrip } from "../api";
+import { fetchTrip, saveTrip, type PublicTrip } from "../api";
 import {
   addExpense,
   addPerson,
@@ -10,7 +10,9 @@ import {
   type Trip,
 } from "../domain";
 import { escapeHtml } from "../escape";
+import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
+import { bindMoments, momentsSection } from "./moments";
 
 let saveLock = false;
 
@@ -30,7 +32,7 @@ function setBusy(root: HTMLElement, busy: boolean): void {
   });
 }
 
-async function persist(id: string, trip: Trip, banner: HTMLElement): Promise<Trip> {
+async function persist(id: string, trip: PublicTrip, banner: HTMLElement): Promise<PublicTrip> {
   if (saveLock) {
     throw new Error("Still saving the last change");
   }
@@ -143,14 +145,18 @@ function expenseForm(trip: Trip): string {
   `;
 }
 
-function paint(root: HTMLElement, id: string, trip: Trip): void {
+function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
+  const hasPin = Boolean(loadPhotoPin(id));
   root.innerHTML = `
     <header class="topbar">
       <div>
         <p class="kicker"><a href="/">Fair share</a></p>
         <h1>${escapeHtml(trip.name)}</h1>
       </div>
-      <button type="button" id="copy-link">Copy link</button>
+      <div class="topbar-actions">
+        <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"}>Copy PIN</button>
+        <button type="button" id="copy-link">Copy link</button>
+      </div>
     </header>
     <p id="banner" class="err" hidden></p>
     <main class="page trip">
@@ -180,6 +186,7 @@ function paint(root: HTMLElement, id: string, trip: Trip): void {
         <h2>Who pays whom</h2>
         ${settleBlock(trip)}
       </section>
+      ${momentsSection()}
     </main>
   `;
 
@@ -188,6 +195,20 @@ function paint(root: HTMLElement, id: string, trip: Trip): void {
   root.classList.toggle("show-weights", Boolean(unequal?.checked));
   unequal?.addEventListener("change", () => {
     root.classList.toggle("show-weights", unequal.checked);
+  });
+
+  root.querySelector("#copy-pin")?.addEventListener("click", async () => {
+    const pin = loadPhotoPin(id);
+    if (!pin) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(pin);
+      const btn = root.querySelector("#copy-pin") as HTMLButtonElement;
+      btn.textContent = "PIN copied";
+    } catch {
+      window.prompt("Copy this photos PIN", pin);
+    }
   });
 
   root.querySelector("#copy-link")?.addEventListener("click", async () => {
@@ -287,6 +308,8 @@ function paint(root: HTMLElement, id: string, trip: Trip): void {
       }
     });
   });
+
+  bindMoments(root, id, trip);
 }
 
 export async function renderTrip(root: HTMLElement, id: string): Promise<void> {

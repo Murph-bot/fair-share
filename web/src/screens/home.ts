@@ -1,5 +1,6 @@
 import { createRemoteTrip } from "../api";
 import { escapeHtml } from "../escape";
+import { savePhotoPin, savePhotoToken } from "../photo-session";
 import { loadRecents } from "../recents";
 
 export function renderHome(root: HTMLElement): void {
@@ -41,7 +42,9 @@ export function renderHome(root: HTMLElement): void {
     const button = form.querySelector("button") as HTMLButtonElement;
     button.disabled = true;
     try {
-      const { id } = await createRemoteTrip(input.value);
+      const { id, pin, photos_token } = await createRemoteTrip(input.value);
+      savePhotoPin(id, pin);
+      savePhotoToken(id, photos_token);
       history.pushState({}, "", `/t/${id}`);
       window.dispatchEvent(new Event("fairshare:route"));
     } catch (err) {

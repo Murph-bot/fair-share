@@ -25,3 +25,19 @@ export class ExpenseNotFoundError extends FairShareError {
     this.name = "ExpenseNotFoundError";
   }
 }
+
+export class AuthError extends FairShareError {
+  readonly statusCode = 401;
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthError";
+  }
+}
+
+export class RateLimitError extends FairShareError {
+  readonly statusCode = 429;
+  constructor(message: string) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}

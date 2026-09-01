@@ -80,7 +80,11 @@ npm --prefix web ci
 npx netlify dev
 ```
 
-Open http://localhost:8888 — create a trip, then share `/t/<id>`. Anyone with the link can edit.
+Open http://localhost:8888 — create a trip, then share `/t/<id>`. Anyone with the link can edit expenses. Photos use a 6-digit PIN shown on the trip page (Copy PIN).
+
+Set `PHOTO_PIN_PEPPER` in `.env` (see `.env.example`) for local functions, and the same key in the Netlify UI for production. Without it, creating a trip fails.
+
+Photos are stored in Netlify Blobs, compressed on the device, and removed automatically after a year.
 
 ```bash
 npm --prefix web test

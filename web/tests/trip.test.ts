@@ -81,6 +81,23 @@ describe("trip operations", () => {
     const trip = parseTrip(raw);
     expect(trip.name).toBe("Athens");
     expect(trip.expenses[0].amount_cents).toBe(1000);
+    expect("pin_hash" in trip).toBe(false);
+  });
+
+  it("ignores a stored PIN hash", () => {
+    const trip = parseTrip({
+      schema_version: 1,
+      name: "Athens",
+      pin_hash: "should-not-leak",
+      people: ["Alice"],
+      expenses: [],
+    });
+    expect(trip).toEqual({
+      schema_version: 1,
+      name: "Athens",
+      people: ["Alice"],
+      expenses: [],
+    });
   });
 
   it("rejects empty participants in stored JSON", () => {
