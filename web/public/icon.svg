@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <rect width="180" height="180" fill="#f4f0e6"/>
+  <rect x="18" y="18" width="144" height="144" fill="none" stroke="#2a1c14" stroke-width="3"/>
+  <text x="90" y="108" text-anchor="middle" font-family="Century Gothic, Didact Gothic, Helvetica, sans-serif" font-size="54" fill="#2a1c14">FS</text>
+</svg>

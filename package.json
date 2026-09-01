@@ -1,0 +1,13 @@
+{
+  "name": "fair-share-site",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "npm --prefix web run build"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.0.8",
+    "@netlify/functions": "^4.2.5"
+  }
+}

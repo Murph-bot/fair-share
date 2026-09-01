@@ -70,7 +70,24 @@ All monetary values are stored and computed as integer cents (e.g. $12.50 → 12
 
 Uses a greedy min-cash-flow heuristic: repeatedly pairs the largest debtor with the largest creditor until all balances are settled. This is **not** guaranteed to be globally optimal (that problem is NP-hard), but it produces a small number of transactions in practice.
 
-## Development
+## Web app
+
+A cream/brown PWA (euro, shared trip links) lives in `web/` and deploys to Netlify.
+
+```bash
+npm ci
+npm --prefix web ci
+npx netlify dev
+```
+
+Open http://localhost:8888 — create a trip, then share `/t/<id>`. Anyone with the link can edit.
+
+```bash
+npm --prefix web test
+npm --prefix web run build
+```
+
+## Development (CLI)
 
 ```bash
 # Run tests

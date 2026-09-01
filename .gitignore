@@ -15,3 +15,7 @@ htmlcov/
 *.pyo
 .DS_Store
 fairshare.json
+node_modules/
+web/node_modules/
+web/dist/
+.netlify/

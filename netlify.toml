@@ -1,0 +1,23 @@
+[build]
+  command = "npm ci && npm --prefix web ci && npm --prefix web run build"
+  publish = "web/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+  directory = "netlify/functions"
+  included_files = ["web/src/domain/**"]
+
+[dev]
+  command = "npm --prefix web run dev"
+  targetPort = 5173
+  port = 8888
+  framework = "#custom"
+
+[[redirects]]
+  from = "/t/*"
+  to = "/index.html"
+  status = 200
