@@ -26,8 +26,8 @@ def equal_split(amount_cents: int, n: int) -> list[int]:
 def weighted_split(amount_cents: int, weights: list[int]) -> list[int]:
     """Split *amount_cents* proportionally by *weights* (Hamilton / largest-remainder method).
 
-    Each share[i] = floor(amount_cents * weights[i] / total_weight).
-    Remaining cents are distributed to the participants with the largest fractional parts.
+    Each share uses integer division: ``amount_cents * weights[i] // total_weight``.
+    Remaining cents go to the largest remainders, then original index.
 
     Raises :class:`ValidationError` for non-positive amounts, empty weights,
     or non-positive weights.
@@ -40,14 +40,12 @@ def weighted_split(amount_cents: int, weights: list[int]) -> list[int]:
         raise ValidationError(f"All weights must be positive, got {weights}")
 
     total_weight = sum(weights)
-    # Exact fractional shares in cents (as floats for remainder calculation)
-    exact = [amount_cents * w / total_weight for w in weights]
-    floors = [int(e) for e in exact]
-    remainders = [e - f for e, f in zip(exact, floors)]
+    floors = [amount_cents * w // total_weight for w in weights]
+    remainders = [amount_cents * w % total_weight for w in weights]
     leftover = amount_cents - sum(floors)
 
-    # Distribute leftover cents to those with highest fractional part (Hamilton method)
-    order = sorted(range(len(weights)), key=lambda i: remainders[i], reverse=True)
+    # Hamilton / largest-remainder: leftover cents go to highest remainder, then index
+    order = sorted(range(len(weights)), key=lambda i: (-remainders[i], i))
     for i in range(leftover):
         floors[order[i]] += 1
 

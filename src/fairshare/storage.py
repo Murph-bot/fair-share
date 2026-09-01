@@ -7,7 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from fairshare.errors import StorageError
+from fairshare.errors import StorageError, ValidationError
 from fairshare.models import Trip
 
 SCHEMA_VERSION = 1
@@ -42,7 +42,7 @@ def load(path: Path) -> Trip:
 
     try:
         return Trip.from_dict(data)
-    except (KeyError, TypeError, ValueError) as exc:
+    except (KeyError, TypeError, ValueError, ValidationError) as exc:
         raise StorageError(f"Invalid data in {path}: {exc}") from exc
 
 
@@ -59,6 +59,8 @@ def save(trip: Trip, path: Path) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(json_text)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, path)
     except OSError as exc:
         try:

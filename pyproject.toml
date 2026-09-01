@@ -30,6 +30,7 @@ addopts = "--tb=short -q"
 [tool.coverage.run]
 source = ["fairshare"]
 branch = true
+omit = ["*/fairshare/__main__.py"]
 
 [tool.coverage.report]
 show_missing = true

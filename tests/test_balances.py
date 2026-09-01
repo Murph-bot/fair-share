@@ -1,5 +1,6 @@
 """Tests for balances.py — net balance computation."""
 
+import pytest
 
 from fairshare.balances import compute_balances
 from fairshare.models import Expense, Trip
@@ -99,7 +100,71 @@ class TestComputeBalances:
     def test_zero_balances_no_expenses(self):
         trip = Trip(name="Empty", people=("Alice", "Bob"))
         bal = compute_balances(trip)
-        assert bal == {}
+        assert bal == {"Alice": 0, "Bob": 0}
+
+    def test_person_not_on_any_expense_stays_zero(self):
+        e = Expense(
+            id="1",
+            description="Dinner",
+            payer="Alice",
+            amount_cents=1000,
+            participants=("Alice", "Bob"),
+        )
+        trip = Trip(name="Test", people=("Alice", "Bob", "Charlie"), expenses=(e,))
+        bal = compute_balances(trip)
+        assert bal["Charlie"] == 0
+        assert sum(bal.values()) == 0
+
+    def test_mismatched_weights_raise(self):
+        from fairshare.errors import ValidationError
+        from fairshare.models import Expense as ExpenseModel
+
+        with pytest.raises(ValidationError):
+            ExpenseModel(
+                id="1",
+                description="Hotel",
+                payer="Alice",
+                amount_cents=9000,
+                participants=("Alice", "Bob"),
+                weights=(2, 1, 1),
+            )
+
+    def test_empty_participants_raise(self):
+        from fairshare.errors import ValidationError
+
+        with pytest.raises(ValidationError):
+            Expense(
+                id="1",
+                description="Ghost",
+                payer="Alice",
+                amount_cents=100,
+                participants=(),
+            )
+
+    def test_zero_amount_raise(self):
+        from fairshare.errors import ValidationError
+
+        with pytest.raises(ValidationError):
+            Expense(
+                id="1",
+                description="Zero",
+                payer="Alice",
+                amount_cents=0,
+                participants=("Alice",),
+            )
+
+    def test_non_positive_weights_raise(self):
+        from fairshare.errors import ValidationError
+
+        with pytest.raises(ValidationError):
+            Expense(
+                id="1",
+                description="Hotel",
+                payer="Alice",
+                amount_cents=100,
+                participants=("Alice", "Bob"),
+                weights=(1, 0),
+            )
 
     def test_everyone_owes_zero_when_split_perfectly(self):
         # Two expenses that cancel out

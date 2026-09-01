@@ -100,3 +100,19 @@ class TestWeightedSplit:
     def test_negative_weight_raises(self):
         with pytest.raises(ValidationError):
             weighted_split(100, [1, -1])
+
+    def test_integer_hamilton_matches_mod_remainders(self):
+        amount, weights = 10, [1, 1, 1]
+        total = sum(weights)
+        floors = [amount * w // total for w in weights]
+        remainders = [amount * w % total for w in weights]
+        leftover = amount - sum(floors)
+        order = sorted(range(len(weights)), key=lambda i: (-remainders[i], i))
+        for i in range(leftover):
+            floors[order[i]] += 1
+        assert weighted_split(amount, weights) == floors
+
+    def test_awkward_ratios_still_sum(self):
+        shares = weighted_split(1, [1, 2, 3])
+        assert sum(shares) == 1
+        assert shares == [0, 0, 1]

@@ -136,3 +136,61 @@ class TestLoad:
         monkeypatch.setattr("fairshare.storage.os.replace", _bad_replace)
         with pytest.raises(StorageError, match="Failed to write"):
             save(sample_trip(), tmp_path_file)
+
+    def test_mismatched_weights_in_file_raise(self, tmp_path_file):
+        payload = {
+            "schema_version": 1,
+            "name": "trip",
+            "people": ["Alice", "Bob"],
+            "expenses": [
+                {
+                    "id": "x",
+                    "description": "Hotel",
+                    "payer": "Alice",
+                    "amount_cents": 9000,
+                    "participants": ["Alice", "Bob"],
+                    "weights": [2, 1, 1],
+                }
+            ],
+        }
+        tmp_path_file.write_text(json.dumps(payload))
+        with pytest.raises(StorageError):
+            load(tmp_path_file)
+
+    def test_empty_participants_in_file_raise(self, tmp_path_file):
+        payload = {
+            "schema_version": 1,
+            "name": "trip",
+            "people": ["Alice"],
+            "expenses": [
+                {
+                    "id": "x",
+                    "description": "Ghost",
+                    "payer": "Alice",
+                    "amount_cents": 100,
+                    "participants": [],
+                }
+            ],
+        }
+        tmp_path_file.write_text(json.dumps(payload))
+        with pytest.raises(StorageError):
+            load(tmp_path_file)
+
+    def test_non_positive_amount_in_file_raise(self, tmp_path_file):
+        payload = {
+            "schema_version": 1,
+            "name": "trip",
+            "people": ["Alice"],
+            "expenses": [
+                {
+                    "id": "x",
+                    "description": "Zero",
+                    "payer": "Alice",
+                    "amount_cents": 0,
+                    "participants": ["Alice"],
+                }
+            ],
+        }
+        tmp_path_file.write_text(json.dumps(payload))
+        with pytest.raises(StorageError):
+            load(tmp_path_file)

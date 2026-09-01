@@ -60,8 +60,8 @@ class TestSettle:
         # Creditors receive (-cash_flow covers positive balance)
         cash = {}
         for p in payments:
-            cash[p.frm] = cash.get(p.frm, 0) + p.amount_cents   # payer's debt shrinks
-            cash[p.to] = cash.get(p.to, 0) - p.amount_cents     # receiver's credit shrinks
+            cash[p.frm] = cash.get(p.frm, 0) + p.amount_cents  # payer's debt shrinks
+            cash[p.to] = cash.get(p.to, 0) - p.amount_cents  # receiver's credit shrinks
         for person, original in balances.items():
             settled = original + cash.get(person, 0)
             assert settled == 0, f"{person} not fully settled: {settled}"

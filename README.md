@@ -6,7 +6,7 @@ A Python CLI tool for splitting expenses fairly among a group of people.
 
 - Integer-cent arithmetic (never floats) for exact splits
 - Equal split with deterministic remainder distribution
-- Weighted split using the Hamilton / largest-remainder method
+- Weighted split using integer Hamilton / largest-remainder (no floats)
 - Greedy min-cash-flow settlement algorithm
 - Atomic JSON persistence (temp file + rename)
 - Case-insensitive person matching (canonical first-seen casing stored)
@@ -22,7 +22,7 @@ Requires Python 3.11+.
 ## Quick Usage
 
 ```bash
-# Start a new trip
+# Start a new trip (refuses to overwrite an existing file unless --force)
 fairshare init "Weekend Trip"
 
 # Add participants
@@ -44,7 +44,7 @@ fairshare balances
 # Show who pays whom to settle up
 fairshare settle
 
-# Remove an expense by ID
+# Remove an expense by full ID or unique prefix
 fairshare remove-expense <id>
 
 # Use a custom data file
@@ -64,7 +64,7 @@ All monetary values are stored and computed as integer cents (e.g. $12.50 → 12
 ### Split algorithm
 
 - **Equal split**: `base = amount // n`, remainder cents are distributed one-by-one to the first `remainder` participants — deterministic and always sums to the original amount.
-- **Weighted split**: Uses the Hamilton (largest-remainder) method. Each participant's exact fractional share is floored, then remaining cents go to those with the largest fractional parts.
+- **Weighted split**: Integer Hamilton (largest-remainder). Each share is `amount * weight // total_weight`; leftover cents go to the largest remainders.
 
 ### Settlement algorithm
 

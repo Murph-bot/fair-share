@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from fairshare.errors import ValidationError
+
 
 @dataclass(frozen=True)
 class Expense:
@@ -16,6 +18,20 @@ class Expense:
     amount_cents: int
     participants: tuple[str, ...]
     weights: tuple[int, ...] | None = None
+
+    def __post_init__(self) -> None:
+        if self.amount_cents <= 0:
+            raise ValidationError(f"amount_cents must be positive, got {self.amount_cents}")
+        if not self.participants:
+            raise ValidationError("participants must not be empty")
+        if self.weights is not None:
+            if len(self.weights) != len(self.participants):
+                raise ValidationError(
+                    f"weights length ({len(self.weights)}) must match "
+                    f"participants ({len(self.participants)})"
+                )
+            if any(w <= 0 for w in self.weights):
+                raise ValidationError(f"All weights must be positive, got {self.weights}")
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
