@@ -68,26 +68,21 @@ export default async (req: Request, context: Context) => {
       if (denied) {
         return denied;
       }
-      const { blobs } = await photosStore().list({ prefix: `${tripId}/` });
-      const photos = [];
-      for (const blob of blobs) {
-        const photoId = blob.key.split("/")[1];
-        if (!photoId || !PHOTO_ID_RE.test(photoId)) {
-          continue;
-        }
-        const meta = await photosStore().getMetadata(blob.key);
-        const createdAt =
-          typeof meta?.metadata?.uploadedAt === "string"
-            ? meta.metadata.uploadedAt
-            : new Date(0).toISOString();
-        const urls = await photoUrls(tripId, photoId, locked);
-        photos.push({
-          id: photoId,
-          createdAt,
-          originalUrl: null,
-          ...urls,
-        });
-      }
+      const store = photosStore();
+      const { blobs } = await store.list({ prefix: `${tripId}/` });
+      const valid = blobs.filter((blob) => PHOTO_ID_RE.test(blob.key.split("/")[1] ?? ""));
+      const photos = await Promise.all(
+        valid.map(async (blob) => {
+          const photoId = blob.key.split("/")[1] ?? "";
+          const meta = await store.getMetadata(blob.key);
+          const createdAt =
+            typeof meta?.metadata?.uploadedAt === "string"
+              ? meta.metadata.uploadedAt
+              : new Date(0).toISOString();
+          const urls = await photoUrls(tripId, photoId, locked);
+          return { id: photoId, createdAt, originalUrl: null, ...urls };
+        }),
+      );
       photos.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       return json(200, { photos });
     }
