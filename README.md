@@ -2,6 +2,8 @@
 
 A Python CLI tool for splitting expenses fairly among a group of people.
 
+**Overview PDF:** [Fair-Share.pdf](Fair-Share.pdf) — architecture, algorithms, and what the CLI, website, and mobile app can do. Source: [`docs/fair-share.tex`](docs/fair-share.tex).
+
 ## Features
 
 - Integer-cent arithmetic (never floats) for exact splits
