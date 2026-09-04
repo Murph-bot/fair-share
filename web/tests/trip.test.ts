@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ExpenseNotFoundError, ValidationError } from "../src/domain/errors";
+import { ExpenseNotFoundError, ValidationError } from "@fairshare/domain/errors";
+import { computeBalances } from "@fairshare/domain/balances";
 import {
   addExpense,
   addPerson,
   createTrip,
   parseTrip,
   removeExpense,
-} from "../src/domain/trip";
+  tripFileJson,
+  updateExpense,
+  type Trip,
+} from "@fairshare/domain/trip";
 
 describe("trip operations", () => {
   it("creates a named trip", () => {
@@ -63,6 +67,140 @@ describe("trip operations", () => {
     expect(() => removeExpense(createTrip("T"), "nope")).toThrow(ExpenseNotFoundError);
   });
 
+  it("updates an expense in place and keeps the same id", () => {
+    const expenseId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    let trip = addPerson(addPerson(createTrip("T"), "Alice"), "Bob");
+    trip = addExpense(
+      trip,
+      {
+        description: "Dinner",
+        payer: "Alice",
+        amount_cents: 6000,
+        participants: ["Alice", "Bob"],
+      },
+      expenseId,
+    );
+    const updated = updateExpense(trip, expenseId, {
+      description: "Lunch",
+      payer: "bob",
+      amount_cents: 2000,
+      participants: ["Alice", "Bob"],
+    });
+    expect(updated.expenses).toHaveLength(1);
+    expect(updated.expenses[0].id).toBe(expenseId);
+    expect(updated.expenses[0]).toEqual({
+      id: expenseId,
+      description: "Lunch",
+      payer: "Bob",
+      amount_cents: 2000,
+      participants: ["Alice", "Bob"],
+    });
+    expect(trip.expenses[0].description).toBe("Dinner");
+    expect(trip.expenses[0].amount_cents).toBe(6000);
+    expect(computeBalances(updated)).toEqual({ Alice: -1000, Bob: 1000 });
+  });
+
+  it("updates an expense by unique id prefix", () => {
+    let trip = addPerson(createTrip("T"), "Alice");
+    trip = addExpense(
+      trip,
+      { description: "Coffee", payer: "Alice", amount_cents: 300, participants: ["Alice"] },
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    );
+    trip = updateExpense(trip, "aaaaaaaa", {
+      description: "Tea",
+      payer: "Alice",
+      amount_cents: 400,
+      participants: ["Alice"],
+    });
+    expect(trip.expenses[0].description).toBe("Tea");
+    expect(trip.expenses[0].id).toBe("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+  });
+
+  it("clears weights when an update omits them", () => {
+    let trip = addPerson(addPerson(createTrip("T"), "Alice"), "Bob");
+    trip = addExpense(
+      trip,
+      {
+        description: "Hotel",
+        payer: "Alice",
+        amount_cents: 9000,
+        participants: ["Alice", "Bob"],
+        weights: [2, 1],
+      },
+      "hotel-id",
+    );
+    trip = updateExpense(trip, "hotel-id", {
+      description: "Hotel",
+      payer: "Alice",
+      amount_cents: 9000,
+      participants: ["Alice", "Bob"],
+    });
+    expect(trip.expenses[0].weights).toBeUndefined();
+  });
+
+  it("rejects updating a missing expense", () => {
+    expect(() =>
+      updateExpense(createTrip("T"), "nope", {
+        description: "X",
+        payer: "Alice",
+        amount_cents: 100,
+        participants: ["Alice"],
+      }),
+    ).toThrow(ExpenseNotFoundError);
+  });
+
+  it("rejects an ambiguous expense id prefix on update", () => {
+    let trip = addPerson(createTrip("T"), "Alice");
+    trip = addExpense(
+      trip,
+      { description: "A", payer: "Alice", amount_cents: 100, participants: ["Alice"] },
+      "aaaa-1111",
+    );
+    trip = addExpense(
+      trip,
+      { description: "B", payer: "Alice", amount_cents: 100, participants: ["Alice"] },
+      "aaaa-2222",
+    );
+    expect(() =>
+      updateExpense(trip, "aaaa", {
+        description: "C",
+        payer: "Alice",
+        amount_cents: 100,
+        participants: ["Alice"],
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it("rejects an empty expense id on update", () => {
+    const trip = addPerson(createTrip("T"), "Alice");
+    expect(() =>
+      updateExpense(trip, "  ", {
+        description: "X",
+        payer: "Alice",
+        amount_cents: 100,
+        participants: ["Alice"],
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it("rejects unknown payers on update", () => {
+    let trip = addPerson(createTrip("T"), "Alice");
+    trip = addExpense(
+      trip,
+      { description: "X", payer: "Alice", amount_cents: 100, participants: ["Alice"] },
+      "id-1",
+    );
+    expect(() =>
+      updateExpense(trip, "id-1", {
+        description: "X",
+        payer: "Zara",
+        amount_cents: 100,
+        participants: ["Alice"],
+      }),
+    ).toThrow();
+  });
+
   it("round-trips JSON through parseTrip", () => {
     const raw = {
       schema_version: 1,
@@ -111,5 +249,37 @@ describe("trip operations", () => {
         ],
       }),
     ).toThrow(/Select at least one person/);
+  });
+
+  it("exports money fields only and round-trips through parseTrip", () => {
+    const trip = parseTrip({
+      schema_version: 1,
+      name: "Athens",
+      people: ["Alice", "Bob"],
+      expenses: [
+        {
+          id: "x",
+          description: "Dinner",
+          payer: "Alice",
+          amount_cents: 1000,
+          participants: ["Alice", "Bob"],
+        },
+      ],
+    });
+    const raw = JSON.parse(
+      tripFileJson({ ...trip, photos_locked: true, pin_hash: "nope" } as Trip & {
+        photos_locked: boolean;
+        pin_hash: string;
+      }),
+    );
+    expect(raw).toEqual({
+      schema_version: 1,
+      name: "Athens",
+      people: ["Alice", "Bob"],
+      expenses: trip.expenses,
+    });
+    expect("photos_locked" in raw).toBe(false);
+    expect("pin_hash" in raw).toBe(false);
+    expect(parseTrip(raw)).toEqual(trip);
   });
 });

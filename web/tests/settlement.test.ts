@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { settle } from "../src/domain/settlement";
+import { settle } from "@fairshare/domain/settlement";
 
 describe("settle", () => {
   it("settles two people in one payment", () => {

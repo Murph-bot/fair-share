@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeBalances } from "../src/domain/balances";
-import { ValidationError } from "../src/domain/errors";
-import type { Expense, Trip } from "../src/domain/trip";
-import { parseTrip } from "../src/domain/trip";
+import { computeBalances } from "@fairshare/domain/balances";
+import { ValidationError } from "@fairshare/domain/errors";
+import type { Expense, Trip } from "@fairshare/domain/trip";
+import { parseTrip } from "@fairshare/domain/trip";
 
 function tripWith(expenses: Expense[], extraPeople: string[] = []): Trip {
   const people: string[] = [];

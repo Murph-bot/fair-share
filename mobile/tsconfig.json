@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@/assets/*": [
+        "./assets/*"
+      ]
+    }
+  },
+  "include": [
+    "src/app/**/*.ts",
+    "src/app/**/*.tsx",
+    "src/api/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/hooks/**/*.ts",
+    "src/utils/**/*.ts",
+    "src/components/moments.tsx",
+    "src/components/donate-button.tsx",
+    ".expo/types/**/*.ts",
+    "global.d.ts",
+    "expo-env.d.ts"
+  ]
+}

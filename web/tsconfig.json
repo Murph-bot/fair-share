@@ -7,6 +7,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "skipLibCheck": true,
+    "paths": {
+      "@fairshare/domain": ["../packages/domain/src/index.ts"],
+      "@fairshare/domain/*": ["../packages/domain/src/*.ts"]
+    },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"]
   },

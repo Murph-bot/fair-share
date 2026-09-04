@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PHOTO_RETENTION_MS } from "../src/domain/photos";
+import { PHOTO_RETENTION_MS } from "@fairshare/domain/photos";
 import {
   createSessionToken,
   generatePin,
@@ -9,7 +9,7 @@ import {
   signPhotoAccess,
   verifyPhotoAccess,
   verifySessionToken,
-} from "../src/domain/pin";
+} from "@fairshare/domain/pin";
 
 const pepper = "test-pepper-not-for-production";
 const tripId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";

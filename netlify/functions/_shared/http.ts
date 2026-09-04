@@ -1,15 +1,28 @@
-import type { Trip } from "../../../web/src/domain/trip";
-import { FairShareError, RateLimitError, ValidationError } from "../../../web/src/domain/errors";
+import type { Trip } from "../../../packages/domain/src/trip";
+import { FairShareError, RateLimitError, ValidationError } from "../../../packages/domain/src/errors";
 import { pinAttemptsStore } from "./stores";
 
 export const MAX_JSON_BYTES = 200_000;
 const PIN_ATTEMPT_LIMIT = 8;
 const PIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+} as const;
+
+export function corsHeaders(): Record<string, string> {
+  return CORS_HEADERS;
+}
+
+export function corsPreflight(): Response {
+  return new Response(null, { status: 204, headers: corsHeaders() });
+}
 
 export function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
+    headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders() },
   });
 }
 
@@ -49,8 +62,15 @@ export async function readJsonBody(req: Request): Promise<unknown> {
   }
 }
 
+export function envVar(name: string): string | undefined {
+  const netlifyGlobal = (
+    globalThis as unknown as { Netlify?: { env?: { get: (k: string) => string | undefined } } }
+  ).Netlify;
+  return netlifyGlobal?.env?.get(name) ?? process.env[name];
+}
+
 export function pinPepper(): string {
-  const value = Netlify.env.get("PHOTO_PIN_PEPPER") ?? process.env.PHOTO_PIN_PEPPER;
+  const value = envVar("PHOTO_PIN_PEPPER");
   if (!value) {
     throw new Error("Photo PIN is not configured");
   }

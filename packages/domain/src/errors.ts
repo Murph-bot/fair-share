@@ -41,3 +41,11 @@ export class RateLimitError extends FairShareError {
     this.name = "RateLimitError";
   }
 }
+
+export class ConfigError extends FairShareError {
+  readonly statusCode = 503;
+  constructor(message: string) {
+    super(message);
+    this.name = "ConfigError";
+  }
+}

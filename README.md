@@ -47,6 +47,16 @@ fairshare settle
 # Remove an expense by full ID or unique prefix
 fairshare remove-expense <id>
 
+# Edit an expense by full ID or unique prefix (same flags as add).
+# Omit --weights to store an equal split.
+fairshare edit-expense <id> "Lunch" --payer Bob --amount 20 --with Alice,Bob
+
+# Download a hosted trip (money only — no photos, no PIN hash)
+fairshare pull --id <32-hex-id> --host https://fair-share-trips.netlify.app
+
+# Upload this file as a new hosted trip (prints a new link and PIN)
+fairshare push --host https://fair-share-trips.netlify.app
+
 # Use a custom data file
 fairshare --file /path/to/trip.json init "My Trip"
 ```
@@ -82,9 +92,23 @@ npx netlify dev
 
 Open http://localhost:8888 — create a trip, then share `/t/<id>`. Anyone with the link can edit expenses. Photos use a 6-digit PIN shown on the trip page (Copy PIN).
 
+**Download JSON** on a trip page saves people and expenses only. **Open JSON** on the home page creates a *new* hosted trip from that file (new id and PIN). Photos are never in the file.
+
+You can also use `fairshare pull` / `fairshare push` with `--host` or `FAIRSHARE_API`. `push` always creates a new hosted trip.
+
 Set `PHOTO_PIN_PEPPER` in `.env` (see `.env.example`) for local functions, and the same key in the Netlify UI for production. Without it, creating a trip fails.
 
-Photos are stored in Netlify Blobs, compressed on the device, and removed automatically after a year.
+Photos are stored in Netlify Blobs, compressed on the device, and removed automatically after a year. Optional full-resolution originals go to Cloudinary (authenticated assets, signed download URLs). Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `.env` and the Netlify UI. If those are missing, gallery uploads still work and `originalUrl` stays empty.
+
+## Mobile app
+
+An Expo client lives in `mobile/` (iOS, Android, and a web preview). It uses the same trip and photo HTTP API. Store binaries are built with EAS; the repo does not contain ejected `ios/` or `android/` projects. See [mobile/README.md](mobile/README.md).
+
+```bash
+npm --prefix mobile ci
+npm --prefix mobile test
+npm --prefix mobile run typecheck
+```
 
 ```bash
 npm --prefix web test

@@ -7,8 +7,11 @@ import {
   parseAmount,
   removeExpense,
   settle,
+  tripFileJson,
+  updateExpense,
+  type Expense,
   type Trip,
-} from "../domain";
+} from "@fairshare/domain";
 import { escapeHtml } from "../escape";
 import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
@@ -62,14 +65,17 @@ function expenseCards(trip: Trip): string {
     .map((e) => {
       const weights =
         e.weights !== undefined
-          ? ` · weights ${e.weights.join(":")}`
+          ? ` · weights ${escapeHtml(e.weights.join(":"))}`
           : "";
-      return `<li>
+          return `<li>
         <div>
           <strong>${escapeHtml(e.description)}</strong>
           <span class="meta">${escapeHtml(e.payer)} paid ${centsToEuro(e.amount_cents)} · ${escapeHtml(e.participants.join(", "))}${weights}</span>
         </div>
-        <button type="button" class="text-btn" data-remove="${escapeHtml(e.id)}">Remove</button>
+        <div class="expense-actions">
+          <button type="button" class="text-btn" data-edit="${escapeHtml(e.id)}" aria-label="Edit ${escapeHtml(e.description)}">Edit</button>
+          <button type="button" class="text-btn" data-remove="${escapeHtml(e.id)}" aria-label="Remove ${escapeHtml(e.description)}">Remove</button>
+        </div>
       </li>`;
     })
     .join("")}</ul>`;
@@ -107,28 +113,51 @@ function settleBlock(trip: Trip): string {
     .join("")}</ul>`;
 }
 
-function expenseForm(trip: Trip): string {
+function centsToFormAmount(cents: number): string {
+  const abs = Math.abs(cents);
+  return `${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+}
+
+function expenseForm(trip: Trip, editing: Expense | null): string {
   if (trip.people.length === 0) {
     return "";
   }
   const options = trip.people
-    .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
+    .map((p) => {
+      const selected = editing !== null && p === editing.payer ? " selected" : "";
+      return `<option value="${escapeHtml(p)}"${selected}>${escapeHtml(p)}</option>`;
+    })
     .join("");
+  const participantSet = new Set(editing?.participants ?? trip.people);
   const checks = trip.people
-    .map(
-      (p) => `<label class="check">
-        <input type="checkbox" name="participant" value="${escapeHtml(p)}" checked>
+    .map((p) => {
+      const checked = participantSet.has(p) ? " checked" : "";
+      const weightIndex = editing?.participants.indexOf(p) ?? -1;
+      const weight =
+        editing?.weights !== undefined && weightIndex >= 0
+          ? String(editing.weights[weightIndex])
+          : "1";
+      return `<label class="check">
+        <input type="checkbox" name="participant" value="${escapeHtml(p)}"${checked}>
         <span>${escapeHtml(p)}</span>
-        <input type="number" name="weight-${escapeHtml(p)}" min="1" step="1" value="1" class="weight" inputmode="numeric">
-      </label>`,
-    )
+        <input type="number" name="weight-${escapeHtml(p)}" min="1" step="1" value="${escapeHtml(weight)}" class="weight" inputmode="numeric">
+      </label>`;
+    })
     .join("");
+  const desc = editing ? escapeHtml(editing.description) : "";
+  const amount = editing ? escapeHtml(centsToFormAmount(editing.amount_cents)) : "";
+  const unequal = editing?.weights !== undefined ? " checked" : "";
+  const submitLabel = editing ? "Save expense" : "Add expense";
+  const editingAttr = editing ? ` data-editing="${escapeHtml(editing.id)}"` : "";
+  const cancel = editing
+    ? `<button type="button" class="text-btn" id="cancel-edit">Cancel</button>`
+    : "";
   return `
-    <form id="expense-form" class="stack">
+    <form id="expense-form" class="stack"${editingAttr}>
       <label for="exp-desc">Description</label>
-      <input id="exp-desc" name="description" type="text" required maxlength="120" autocomplete="off">
+      <input id="exp-desc" name="description" type="text" required maxlength="120" autocomplete="off" value="${desc}">
       <label for="exp-amount">Amount (€)</label>
-      <input id="exp-amount" name="amount" type="text" inputmode="decimal" required placeholder="60 or 60.50">
+      <input id="exp-amount" name="amount" type="text" inputmode="decimal" required placeholder="60 or 60.50" value="${amount}">
       <label for="exp-payer">Who paid</label>
       <select id="exp-payer" name="payer" required>${options}</select>
       <fieldset>
@@ -136,17 +165,19 @@ function expenseForm(trip: Trip): string {
         ${checks}
       </fieldset>
       <label class="check">
-        <input type="checkbox" id="unequal" name="unequal">
+        <input type="checkbox" id="unequal" name="unequal"${unequal}>
         <span>Unequal shares (integer weights)</span>
       </label>
       <p id="expense-error" class="err" hidden></p>
-      <button type="submit">Add expense</button>
+      <button type="submit">${submitLabel}</button>
+      ${cancel}
     </form>
   `;
 }
 
-function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
+function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: string | null = null): void {
   const hasPin = Boolean(loadPhotoPin(id));
+  const editing = editingId ? trip.expenses.find((e) => e.id === editingId) ?? null : null;
   root.innerHTML = `
     <header class="topbar">
       <div>
@@ -156,6 +187,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
       <div class="topbar-actions">
         <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"}>Copy PIN</button>
         <button type="button" id="copy-link">Copy link</button>
+        <button type="button" id="download-json">Download JSON</button>
       </div>
     </header>
     <p id="banner" class="err" hidden></p>
@@ -171,8 +203,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
         <p id="person-error" class="err" hidden></p>
       </section>
       <section class="block">
-        <h2>Add expense</h2>
-        ${expenseForm(trip)}
+        <h2>${editing ? "Edit expense" : "Add expense"}</h2>
+        ${expenseForm(trip, editing)}
       </section>
       <section class="block">
         <h2>Expenses</h2>
@@ -222,6 +254,16 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
     }
   });
 
+  root.querySelector("#download-json")?.addEventListener("click", () => {
+    const blob = new Blob([tripFileJson(trip)], { type: "application/json" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "fairshare.json";
+    link.click();
+    URL.revokeObjectURL(href);
+  });
+
   const personForm = root.querySelector("#person-form") as HTMLFormElement;
   const personError = root.querySelector("#person-error") as HTMLElement;
   personForm.addEventListener("submit", async (event) => {
@@ -236,7 +278,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
       }
       setBusy(root, true);
       const saved = await persist(id, next, banner);
-      paint(root, id, saved);
+      paint(root, id, saved, editingId);
     } catch (err) {
       if (!saveLock) {
         setBusy(root, false);
@@ -265,17 +307,17 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
         });
       }
       const amountCents = parseAmount(String(data.get("amount") ?? ""));
-      const next = addExpense(
-        trip,
-        {
-          description: String(data.get("description") ?? ""),
-          payer: String(data.get("payer") ?? ""),
-          amount_cents: amountCents,
-          participants,
-          weights,
-        },
-        crypto.randomUUID(),
-      );
+      const input = {
+        description: String(data.get("description") ?? ""),
+        payer: String(data.get("payer") ?? ""),
+        amount_cents: amountCents,
+        participants,
+        weights,
+      };
+      const editingExpenseId = expenseFormEl.dataset.editing;
+      const next = editingExpenseId
+        ? updateExpense(trip, editingExpenseId, input)
+        : addExpense(trip, input, crypto.randomUUID());
       setBusy(root, true);
       const saved = await persist(id, next, banner);
       paint(root, id, saved);
@@ -284,9 +326,23 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
         setBusy(root, false);
       }
       if (expenseError) {
-        setBanner(expenseError, err instanceof Error ? err.message : "Could not add expense");
+        setBanner(expenseError, err instanceof Error ? err.message : "Could not save expense");
       }
     }
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const expenseId = button.dataset.edit;
+      if (!expenseId) {
+        return;
+      }
+      paint(root, id, trip, expenseId);
+    });
+  });
+
+  root.querySelector("#cancel-edit")?.addEventListener("click", () => {
+    paint(root, id, trip);
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((button) => {
@@ -299,7 +355,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip): void {
         const next = removeExpense(trip, expenseId);
         setBusy(root, true);
         const saved = await persist(id, next, banner);
-        paint(root, id, saved);
+        const stillEditing = editingId && expenseId !== editingId ? editingId : null;
+        paint(root, id, saved, stillEditing);
       } catch (err) {
         if (!saveLock) {
           setBusy(root, false);

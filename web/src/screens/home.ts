@@ -1,4 +1,5 @@
-import { createRemoteTrip } from "../api";
+import { createRemoteTrip, saveTrip } from "../api";
+import { parseTrip } from "@fairshare/domain";
 import { escapeHtml } from "../escape";
 import { savePhotoPin, savePhotoToken } from "../photo-session";
 import { loadRecents } from "../recents";
@@ -27,6 +28,13 @@ export function renderHome(root: HTMLElement): void {
         <button type="submit">Create trip</button>
       </form>
       <section class="block">
+        <h2>Open JSON</h2>
+        <p class="muted">Money only. Photos stay on the hosted trip and are not in the file.</p>
+        <input id="import-json" class="sr" type="file" accept="application/json,.json">
+        <button type="button" id="import-json-btn">Open JSON</button>
+        <p id="import-error" class="err" hidden></p>
+      </section>
+      <section class="block">
         <h2>On this device</h2>
         ${recentList}
       </section>
@@ -35,12 +43,21 @@ export function renderHome(root: HTMLElement): void {
 
   const form = root.querySelector("#create-form") as HTMLFormElement;
   const errorEl = root.querySelector("#create-error") as HTMLElement;
+  const importInput = root.querySelector("#import-json") as HTMLInputElement;
+  const importBtn = root.querySelector("#import-json-btn") as HTMLButtonElement;
+  const importError = root.querySelector("#import-error") as HTMLElement;
+  const createBtn = form.querySelector("button") as HTMLButtonElement;
+
+  const setImportBusy = (busy: boolean): void => {
+    importBtn.disabled = busy;
+    createBtn.disabled = busy;
+  };
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     errorEl.hidden = true;
     const input = form.elements.namedItem("name") as HTMLInputElement;
-    const button = form.querySelector("button") as HTMLButtonElement;
-    button.disabled = true;
+    setImportBusy(true);
     try {
       const { id, pin, photos_token } = await createRemoteTrip(input.value);
       savePhotoPin(id, pin);
@@ -50,7 +67,35 @@ export function renderHome(root: HTMLElement): void {
     } catch (err) {
       errorEl.hidden = false;
       errorEl.textContent = err instanceof Error ? err.message : "Could not create trip";
-      button.disabled = false;
+      setImportBusy(false);
+    }
+  });
+
+  importBtn.addEventListener("click", () => {
+    importInput.click();
+  });
+
+  importInput.addEventListener("change", async () => {
+    const file = importInput.files?.[0];
+    importInput.value = "";
+    if (!file) {
+      return;
+    }
+    importError.hidden = true;
+    setImportBusy(true);
+    try {
+      const raw: unknown = JSON.parse(await file.text());
+      const trip = parseTrip(raw);
+      const created = await createRemoteTrip(trip.name);
+      await saveTrip(created.id, trip);
+      savePhotoPin(created.id, created.pin);
+      savePhotoToken(created.id, created.photos_token);
+      history.pushState({}, "", `/t/${created.id}`);
+      window.dispatchEvent(new Event("fairshare:route"));
+    } catch (err) {
+      importError.hidden = false;
+      importError.textContent = err instanceof Error ? err.message : "Could not import that trip";
+      setImportBusy(false);
     }
   });
 }

@@ -1,6 +1,16 @@
-import { fetchPhotos, unlockPhotos, uploadPhoto, type PublicTrip } from "../api";
+import {
+  deletePhoto,
+  fetchPhotos,
+  lockTripPhotos,
+  signOriginalUpload,
+  unlockPhotos,
+  uploadPhoto,
+  type PublicTrip,
+} from "../api";
+import { uploadOriginalToCloudinary } from "../cloudinary-upload";
+import { MAX_ORIGINAL_BYTES } from "@fairshare/domain/cloudinary";
 import { compressImage } from "../compress-image";
-import type { PhotoRecord } from "../domain/photos";
+import type { PhotoRecord } from "@fairshare/domain/photos";
 import { escapeHtml } from "../escape";
 import { loadPhotoToken, savePhotoPin, savePhotoToken } from "../photo-session";
 
@@ -24,6 +34,21 @@ function safePhotoUrl(url: string): string | undefined {
   return undefined;
 }
 
+function safeOriginalUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") {
+      return undefined;
+    }
+    if (parsed.hostname === "api.cloudinary.com" || parsed.hostname.endsWith(".cloudinary.com")) {
+      return url;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 function galleryHtml(photos: PhotoRecord[]): string {
   if (photos.length === 0) {
     return `<p class="muted">No photos yet.</p>`;
@@ -35,22 +60,44 @@ function galleryHtml(photos: PhotoRecord[]): string {
       if (!displayUrl || !thumbUrl) {
         return "";
       }
-      return `<li>
+      const originalUrl = photo.originalUrl ? safeOriginalUrl(photo.originalUrl) : undefined;
+      const original = originalUrl
+        ? `<a class="text-btn" href="${escapeHtml(originalUrl)}" target="_blank" rel="noopener noreferrer">Original</a>`
+        : "";
+      return `<li class="moment-tile">
         <a href="${escapeHtml(displayUrl)}" target="_blank" rel="noopener noreferrer">
           <img src="${escapeHtml(thumbUrl)}" alt="Trip photo" width="400" height="400">
         </a>
+        <div class="moment-actions">
+          ${original}
+          <button type="button" class="text-btn photo-delete-btn" data-delete-photo="${escapeHtml(photo.id)}" aria-label="Delete photo">Delete</button>
+        </div>
       </li>`;
     })
     .join("")}</ul>`;
 }
 
-function unlockedHtml(): string {
+function unlockedHtml(showLockCta: boolean = false): string {
+  const lockCta = showLockCta
+    ? `
+    <div class="lock-cta stack">
+      <p class="muted">Photos on this trip are not locked with a PIN.</p>
+      <form id="lock-form" class="row">
+        <label class="sr" for="new-pin">Choose 6-digit PIN (optional)</label>
+        <input id="new-pin" name="pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="6-digit PIN (optional)">
+        <button type="submit">Lock photos with a PIN</button>
+      </form>
+      <p id="lock-error" class="err" hidden></p>
+    </div>
+  `
+    : "";
   return `
     <form id="photo-form" class="stack">
       <label for="photo-file">Add a photo</label>
       <input id="photo-file" name="photo" type="file" accept="image/*">
       <p id="photo-error" class="err" hidden></p>
     </form>
+    ${lockCta}
     <div id="photo-list"><p class="muted">Loading photos…</p></div>
   `;
 }
@@ -84,7 +131,50 @@ export function bindMoments(root: HTMLElement, tripId: string, trip: PublicTrip)
 
   const locked = Boolean(trip.photos_locked);
   const unlocked = !locked || Boolean(loadPhotoToken(tripId));
-  body.innerHTML = unlocked ? unlockedHtml() : lockedHtml();
+  body.innerHTML = unlocked ? unlockedHtml(!locked) : lockedHtml();
+
+  const lockForm = body.querySelector("#lock-form") as HTMLFormElement | null;
+  const lockError = body.querySelector("#lock-error") as HTMLElement | null;
+  lockForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = lockForm.elements.namedItem("pin") as HTMLInputElement;
+    const submitBtn = lockForm.querySelector("button[type='submit']") as HTMLButtonElement | null;
+    const pinVal = input.value.trim();
+    if (pinVal && !/^\d{6}$/.test(pinVal)) {
+      setLocalError(lockError, "PIN must be 6 digits");
+      return;
+    }
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Locking…";
+      }
+      setLocalError(lockError, null);
+      const res = await lockTripPhotos(tripId, pinVal || undefined);
+      savePhotoToken(tripId, res.photos_token);
+      savePhotoPin(tripId, res.pin);
+      const copyPin = root.querySelector("#copy-pin") as HTMLButtonElement | null;
+      if (copyPin) {
+        copyPin.hidden = false;
+        copyPin.textContent = "Copy PIN";
+      }
+      try {
+        await navigator.clipboard.writeText(res.pin);
+        if (copyPin) {
+          copyPin.textContent = "PIN copied";
+        }
+      } catch {
+        /* clipboard write may fail without user gesture */
+      }
+      bindMoments(root, tripId, { ...trip, photos_locked: true });
+    } catch (err) {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Lock photos with a PIN";
+      }
+      setLocalError(lockError, err instanceof Error ? err.message : "Could not lock photos");
+    }
+  });
 
   const pinForm = body.querySelector("#pin-form") as HTMLFormElement | null;
   pinForm?.addEventListener("submit", async (event) => {
@@ -117,7 +207,17 @@ export function bindMoments(root: HTMLElement, tripId: string, trip: PublicTrip)
       setLocalError(photoError, null);
       fileInput.disabled = true;
       const jpeg = await compressImage(file);
-      await uploadPhoto(tripId, jpeg);
+      let extras: { photoId?: string; cloudinaryId?: string } | undefined;
+      if (file.size > jpeg.size && file.size <= MAX_ORIGINAL_BYTES) {
+        try {
+          const sign = await signOriginalUpload(tripId);
+          const cloudinaryId = await uploadOriginalToCloudinary(file, sign);
+          extras = { photoId: sign.photoId, cloudinaryId };
+        } catch {
+          extras = undefined;
+        }
+      }
+      await uploadPhoto(tripId, jpeg, extras);
       await fillList(body, tripId);
     } catch (err) {
       setLocalError(photoError, err instanceof Error ? err.message : "Could not upload photo");
@@ -136,6 +236,7 @@ async function fillList(body: HTMLElement, tripId: string): Promise<void> {
   if (!list) {
     return;
   }
+  const photoError = body.querySelector("#photo-error") as HTMLElement | null;
   try {
     const photos = await fetchPhotos(tripId);
     list.innerHTML = galleryHtml(photos);
@@ -144,6 +245,30 @@ async function fillList(body: HTMLElement, tripId: string): Promise<void> {
         const link = img.closest("a");
         if (link && img.src !== link.href) {
           img.src = link.href;
+        }
+      });
+    });
+    list.querySelectorAll<HTMLButtonElement>("[data-delete-photo]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const photoId = button.dataset.deletePhoto;
+        if (!photoId) return;
+        if (!window.confirm("Delete this photo permanently?")) {
+          return;
+        }
+        try {
+          list.querySelectorAll<HTMLButtonElement>("[data-delete-photo]").forEach((b) => {
+            b.disabled = true;
+          });
+          button.textContent = "Deleting…";
+          setLocalError(photoError, null);
+          await deletePhoto(tripId, photoId);
+          await fillList(body, tripId);
+        } catch (err) {
+          list.querySelectorAll<HTMLButtonElement>("[data-delete-photo]").forEach((b) => {
+            b.disabled = false;
+          });
+          button.textContent = "Delete";
+          setLocalError(photoError, err instanceof Error ? err.message : "Could not delete photo");
         }
       });
     });

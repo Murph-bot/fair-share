@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ValidationError } from "../src/domain/errors";
-import { equalSplit, weightedSplit } from "../src/domain/splitter";
+import { ValidationError } from "@fairshare/domain/errors";
+import { equalSplit, weightedSplit } from "@fairshare/domain/splitter";
 
 describe("equalSplit", () => {
   it("divides evenly", () => {

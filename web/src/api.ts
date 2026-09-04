@@ -1,5 +1,5 @@
-import type { Trip } from "./domain";
-import type { PhotoRecord } from "./domain/photos";
+import type { Trip } from "@fairshare/domain";
+import type { PhotoRecord } from "@fairshare/domain/photos";
 import { loadPhotoToken } from "./photo-session";
 
 export type PublicTrip = Trip & { photos_locked?: boolean };
@@ -102,9 +102,19 @@ export async function fetchPhotos(tripId: string): Promise<PhotoRecord[]> {
   return body.photos;
 }
 
-export async function uploadPhoto(tripId: string, jpeg: Blob): Promise<PhotoRecord> {
+export async function uploadPhoto(
+  tripId: string,
+  jpeg: Blob,
+  extras?: { photoId?: string; cloudinaryId?: string },
+): Promise<PhotoRecord> {
   const data = new FormData();
   data.append("photo", new File([jpeg], "photo.jpg", { type: "image/jpeg" }));
+  if (extras?.photoId) {
+    data.append("photo_id", extras.photoId);
+  }
+  if (extras?.cloudinaryId) {
+    data.append("cloudinary_id", extras.cloudinaryId);
+  }
   const res = await fetch(`/api/trips/${tripId}/photos`, {
     method: "POST",
     headers: authHeaders(tripId),
@@ -115,4 +125,74 @@ export async function uploadPhoto(tripId: string, jpeg: Blob): Promise<PhotoReco
   }
   const body = (await res.json()) as { photo: PhotoRecord };
   return body.photo;
+}
+
+export async function deletePhoto(tripId: string, photoId: string): Promise<void> {
+  const res = await fetch(`/api/trips/${tripId}/photos/${photoId}`, {
+    method: "DELETE",
+    headers: authHeaders(tripId),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+}
+
+export async function lockTripPhotos(
+  tripId: string,
+  pin?: string,
+): Promise<{ pin: string; photos_token: string }> {
+  const res = await fetch(`/api/trips/${tripId}/pin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(pin ? { pin } : {}),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+  const body = (await res.json()) as { pin?: unknown; photos_token?: unknown };
+  if (typeof body.pin !== "string" || typeof body.photos_token !== "string") {
+    throw new Error("Could not set photos PIN");
+  }
+  return { pin: body.pin, photos_token: body.photos_token };
+}
+
+export type OriginalUploadSign = {
+  photoId: string;
+  timestamp: number;
+  signature: string;
+  apiKey: string;
+  cloudName: string;
+  folder: string;
+  publicId: string;
+  type: string;
+  uploadUrl: string;
+  maxFileSize: number;
+  allowedFormats: string;
+};
+
+export async function signOriginalUpload(tripId: string): Promise<OriginalUploadSign> {
+  const res = await fetch(`/api/trips/${tripId}/photos/sign`, {
+    method: "POST",
+    headers: authHeaders(tripId),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+  const body = (await res.json()) as Partial<OriginalUploadSign>;
+  if (
+    typeof body.photoId !== "string" ||
+    typeof body.timestamp !== "number" ||
+    typeof body.signature !== "string" ||
+    typeof body.apiKey !== "string" ||
+    typeof body.cloudName !== "string" ||
+    typeof body.folder !== "string" ||
+    typeof body.publicId !== "string" ||
+    typeof body.type !== "string" ||
+    typeof body.uploadUrl !== "string" ||
+    typeof body.maxFileSize !== "number" ||
+    typeof body.allowedFormats !== "string"
+  ) {
+    throw new Error("Could not prepare original upload");
+  }
+  return body as OriginalUploadSign;
 }

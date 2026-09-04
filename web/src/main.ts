@@ -1,4 +1,4 @@
-import { TRIP_ID_RE } from "./domain";
+import { TRIP_ID_RE } from "@fairshare/domain";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
 

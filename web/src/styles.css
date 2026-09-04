@@ -122,6 +122,44 @@ a {
   color: inherit;
 }
 
+.moment-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.moment-tile > a {
+  width: 100%;
+}
+
+.moment-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.moment-actions .text-btn {
+  width: auto;
+}
+
+.photo-delete-btn {
+  font-size: 0.85rem;
+  color: var(--neg);
+  cursor: pointer;
+  margin-top: 0.15rem;
+}
+
+.photo-delete-btn:hover {
+  color: var(--ink);
+}
+
+.photo-delete-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .moments-grid img {
   display: block;
   width: 100%;
@@ -129,6 +167,12 @@ a {
   object-fit: cover;
   background: var(--paper);
   border: 1px solid var(--rule);
+}
+
+.lock-cta {
+  margin-top: 1rem;
+  padding: 0.8rem 0;
+  border-top: 1px dashed var(--rule);
 }
 
 .block {
@@ -192,6 +236,12 @@ button:disabled {
   padding: 0 0.2rem;
   text-decoration: underline;
   text-underline-offset: 0.15em;
+}
+
+.expense-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 fieldset {

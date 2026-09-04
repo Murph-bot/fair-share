@@ -19,4 +19,9 @@ fairshare.json
 node_modules/
 web/node_modules/
 web/dist/
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/ios/
+mobile/android/
 .netlify/

@@ -5,6 +5,7 @@ export {
   ExpenseNotFoundError,
   AuthError,
   RateLimitError,
+  ConfigError,
 } from "./errors";
 export { parseAmount, centsToEuro } from "./money";
 export { equalSplit, weightedSplit } from "./splitter";
@@ -17,8 +18,10 @@ export {
   createTrip,
   addPerson,
   addExpense,
+  updateExpense,
   removeExpense,
   parseTrip,
+  tripFileJson,
   findCanonical,
   validateExpense,
   type Trip,
@@ -42,4 +45,12 @@ export {
   PHOTO_MAX_EDGE,
   PHOTO_RETENTION_MS,
   type PhotoRecord,
+  type PublicTrip,
 } from "./photos";
+export {
+  MAX_ORIGINAL_BYTES,
+  ORIGINAL_ALLOWED_FORMATS,
+  CLOUDINARY_ASSET_TYPE,
+  cloudinaryFolder,
+  cloudinaryPublicId,
+} from "./cloudinary";

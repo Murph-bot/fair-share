@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -17,6 +18,7 @@ from fairshare.errors import (
 )
 from fairshare.models import Expense, Trip
 from fairshare.money import cents_to_str, parse_amount
+from fairshare.remote import pull_trip, push_trip, resolve_host
 from fairshare.settlement import settle
 from fairshare.storage import load, save
 
@@ -83,6 +85,39 @@ def _build_parser() -> argparse.ArgumentParser:
     p_rm = sub.add_parser("remove-expense", help="Remove an expense by ID")
     p_rm.add_argument("id", help="Expense ID")
 
+    # edit-expense
+    p_edit = sub.add_parser("edit-expense", help="Edit an expense by ID")
+    p_edit.add_argument("id", help="Expense ID")
+    p_edit.add_argument("description", help="Expense description")
+    p_edit.add_argument("--payer", required=True, help="Who paid")
+    p_edit.add_argument("--amount", required=True, help="Amount (e.g. 60, 60.00, $60)")
+    p_edit.add_argument(
+        "--with",
+        dest="participants",
+        required=True,
+        help="Comma-separated list of participants",
+    )
+    p_edit.add_argument(
+        "--weights",
+        default=None,
+        help="Comma-separated name=weight pairs, e.g. Alice=2,Bob=1",
+    )
+
+    p_pull = sub.add_parser("pull", help="Download a hosted trip into the local JSON file")
+    p_pull.add_argument("--id", required=True, help="Hosted trip id (32 hex characters)")
+    p_pull.add_argument(
+        "--host",
+        default=None,
+        help="API origin (or set FAIRSHARE_API), e.g. https://fair-share-trips.netlify.app",
+    )
+
+    p_push = sub.add_parser("push", help="Upload the local JSON file as a new hosted trip")
+    p_push.add_argument(
+        "--host",
+        default=None,
+        help="API origin (or set FAIRSHARE_API), e.g. https://fair-share-trips.netlify.app",
+    )
+
     return parser
 
 
@@ -145,9 +180,26 @@ def cmd_add_person(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_add(args: argparse.Namespace) -> int:
-    trip = _require_file(args.file)
+def _find_expense(trip: Trip, expense_id: str) -> Expense:
+    """Return the expense matching *expense_id* exactly or by unique prefix."""
+    trimmed = expense_id.strip()
+    if not trimmed:
+        raise ValidationError("Expense ID cannot be empty")
 
+    exact = tuple(e for e in trip.expenses if e.id == trimmed)
+    if exact:
+        return exact[0]
+
+    matches = tuple(e for e in trip.expenses if e.id.startswith(trimmed))
+    if not matches:
+        raise ExpenseNotFoundError(f"No expense with id '{trimmed}' found.")
+    if len(matches) > 1:
+        ids = ", ".join(e.id for e in matches)
+        raise ValidationError(f"Ambiguous expense id prefix {trimmed!r}. Matches: {ids}")
+    return matches[0]
+
+
+def _expense_from_args(args: argparse.Namespace, trip: Trip, expense_id: str) -> Expense:
     description = args.description.strip()
     if not description:
         raise ValidationError("Expense description cannot be empty")
@@ -158,7 +210,6 @@ def cmd_add(args: argparse.Namespace) -> int:
     if payer_canonical is None:
         raise UnknownPersonError(f"Payer '{args.payer}' not found. Add them with add-person first.")
 
-    # Parse participants
     raw_parts = [p.strip() for p in args.participants.split(",") if p.strip()]
     if not raw_parts:
         raise ValidationError("--with must contain at least one participant")
@@ -175,7 +226,6 @@ def cmd_add(args: argparse.Namespace) -> int:
     if len(participants_canonical) != len(set(participants_canonical)):
         raise ValidationError("Duplicate participants in --with are not allowed")
 
-    # Parse optional weights
     weights: tuple[int, ...] | None = None
     if args.weights:
         weight_map: dict[str, int] = {}
@@ -209,8 +259,8 @@ def cmd_add(args: argparse.Namespace) -> int:
 
         weights = tuple(weight_map[p] for p in participants_canonical)
 
-    expense = Expense(
-        id=str(uuid.uuid4()),
+    return Expense(
+        id=expense_id,
         description=description,
         payer=payer_canonical,
         amount_cents=amount_cents,
@@ -218,6 +268,10 @@ def cmd_add(args: argparse.Namespace) -> int:
         weights=weights,
     )
 
+
+def cmd_add(args: argparse.Namespace) -> int:
+    trip = _require_file(args.file)
+    expense = _expense_from_args(args, trip, str(uuid.uuid4()))
     new_trip = Trip(
         name=trip.name,
         people=trip.people,
@@ -274,23 +328,8 @@ def cmd_settle(args: argparse.Namespace) -> int:
 
 def cmd_remove_expense(args: argparse.Namespace) -> int:
     trip = _require_file(args.file)
-    expense_id = args.id.strip()
-    if not expense_id:
-        raise ValidationError("Expense ID cannot be empty")
-
-    exact = tuple(e for e in trip.expenses if e.id == expense_id)
-    if exact:
-        target_id = exact[0].id
-    else:
-        matches = tuple(e for e in trip.expenses if e.id.startswith(expense_id))
-        if not matches:
-            raise ExpenseNotFoundError(f"No expense with id '{expense_id}' found.")
-        if len(matches) > 1:
-            ids = ", ".join(e.id for e in matches)
-            raise ValidationError(f"Ambiguous expense id prefix {expense_id!r}. Matches: {ids}")
-        target_id = matches[0].id
-
-    remaining = tuple(e for e in trip.expenses if e.id != target_id)
+    target = _find_expense(trip, args.id)
+    remaining = tuple(e for e in trip.expenses if e.id != target.id)
     new_trip = Trip(
         name=trip.name,
         people=trip.people,
@@ -298,7 +337,42 @@ def cmd_remove_expense(args: argparse.Namespace) -> int:
         schema_version=trip.schema_version,
     )
     save(new_trip, args.file)
-    print(f"Removed expense {target_id}")
+    print(f"Removed expense {target.id}")
+    return 0
+
+
+def cmd_edit_expense(args: argparse.Namespace) -> int:
+    trip = _require_file(args.file)
+    target = _find_expense(trip, args.id)
+    expense = _expense_from_args(args, trip, target.id)
+    updated = tuple(expense if e.id == target.id else e for e in trip.expenses)
+    new_trip = Trip(
+        name=trip.name,
+        people=trip.people,
+        expenses=updated,
+        schema_version=trip.schema_version,
+    )
+    save(new_trip, args.file)
+    amount = cents_to_str(expense.amount_cents)
+    print(f"Updated expense '{expense.description}' ({amount}) — id: {expense.id}")
+    return 0
+
+
+def cmd_pull(args: argparse.Namespace) -> int:
+    host = resolve_host(args.host, os.environ.get("FAIRSHARE_API"))
+    trip = pull_trip(args.id, host, args.file)
+    print(f"Pulled '{trip.name}' → {args.file}")
+    return 0
+
+
+def cmd_push(args: argparse.Namespace) -> int:
+    trip = _require_file(args.file)
+    host = resolve_host(args.host, os.environ.get("FAIRSHARE_API"))
+    result = push_trip(trip, host)
+    print(f"Pushed '{trip.name}'")
+    print(f"Trip id: {result['id']}")
+    print(f"Link: {result['url']}")
+    print(f"Photos PIN: {result['pin']}")
     return 0
 
 
@@ -310,6 +384,9 @@ _COMMAND_MAP = {
     "balances": cmd_balances,
     "settle": cmd_settle,
     "remove-expense": cmd_remove_expense,
+    "edit-expense": cmd_edit_expense,
+    "pull": cmd_pull,
+    "push": cmd_push,
 }
 
 

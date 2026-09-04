@@ -1,18 +1,20 @@
 import type { Config, Context } from "@netlify/functions";
-import { ValidationError } from "../../web/src/domain/errors";
+import { ValidationError } from "../../packages/domain/src/errors";
 import {
   createSessionToken,
   generatePin,
   hashPin,
   normalizePin,
   pinMatches,
-} from "../../web/src/domain/pin";
-import { createTrip, newTripId, parseTrip, TRIP_ID_RE, type Trip } from "../../web/src/domain/trip";
+} from "../../packages/domain/src/pin";
+import { createTrip, newTripId, parseTrip, TRIP_ID_RE, type Trip } from "../../packages/domain/src/trip";
 import {
   assertPinAllowed,
   clearPinFailures,
+  corsPreflight,
   errorResponse,
   json,
+  MAX_JSON_BYTES,
   pinHashFromRecord,
   pinPepper,
   publicTrip,
@@ -25,6 +27,10 @@ export default async (req: Request, context: Context) => {
   try {
     const id = context.params?.id;
     const store = tripsStore();
+
+    if (req.method === "OPTIONS") {
+      return corsPreflight();
+    }
 
     if (req.method === "POST" && !id) {
       const payload = await readJsonBody(req);
@@ -49,11 +55,20 @@ export default async (req: Request, context: Context) => {
       return json(404, { error: "Trip not found" });
     }
 
-    const sessionPath = new URL(req.url).pathname.endsWith("/session");
+    const url = new URL(req.url);
+    const sessionPath = url.pathname.endsWith("/session");
     if (req.method === "POST" && sessionPath) {
-      return handleSession(req, id, context.ip ?? "unknown");
+      return await handleSession(req, id, context.ip ?? "unknown");
     }
     if (sessionPath) {
+      return json(405, { error: "Method not allowed" });
+    }
+
+    const pinPath = url.pathname.endsWith("/pin");
+    if (req.method === "POST" && pinPath) {
+      return await handleSetPin(req, id, context.ip ?? "unknown");
+    }
+    if (pinPath) {
       return json(405, { error: "Method not allowed" });
     }
 
@@ -113,6 +128,68 @@ async function handleSession(req: Request, tripId: string, ip: string): Promise<
   return json(200, { token });
 }
 
+// Anyone with the trip link may set a PIN once on a grandfathered trip that has no pin_hash.
+// This matches the open trust model of the app (same as editing expenses).
+// If a PIN has already been set, further attempts are rejected with 400 (no PIN rotation in v3).
+async function handleSetPin(req: Request, tripId: string, ip: string): Promise<Response> {
+  const store = tripsStore();
+  const raw = await store.get(tripId, { type: "json" });
+  if (raw === null) {
+    return json(404, { error: "Trip not found" });
+  }
+
+  const existingPinHash = pinHashFromRecord(raw);
+  if (existingPinHash) {
+    throw new ValidationError("Trip already has a PIN");
+  }
+
+  await assertPinAllowed(tripId, ip);
+
+  let pin: string | null = null;
+  const rawText = await req.text();
+  if (rawText.trim().length > 0) {
+    if (rawText.length > MAX_JSON_BYTES) {
+      throw new ValidationError("Payload is too large");
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new ValidationError("Invalid JSON");
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new ValidationError("Body must be an object");
+    }
+    const pinVal = (parsed as { pin?: unknown }).pin;
+    if (pinVal !== undefined && pinVal !== null && pinVal !== "") {
+      const normalized = normalizePin(String(pinVal));
+      if (!normalized) {
+        throw new ValidationError("PIN must be 6 digits");
+      }
+      pin = normalized;
+    }
+  }
+
+  if (!pin) {
+    pin = generatePin();
+  }
+
+  const pepper = pinPepper();
+  const pin_hash = await hashPin(pin, tripId, pepper);
+  const latest = await store.get(tripId, { type: "json" });
+  if (latest === null) {
+    return json(404, { error: "Trip not found" });
+  }
+  if (pinHashFromRecord(latest)) {
+    throw new ValidationError("Trip already has a PIN");
+  }
+  const trip = parseTrip(latest);
+  await store.setJSON(tripId, { ...trip, pin_hash });
+  await clearPinFailures(tripId, ip);
+  const photos_token = await createSessionToken(tripId, pepper);
+  return json(200, { pin, photos_token });
+}
+
 export const config: Config = {
-  path: ["/api/trips", "/api/trips/:id", "/api/trips/:id/session"],
+  path: ["/api/trips", "/api/trips/:id", "/api/trips/:id/session", "/api/trips/:id/pin"],
 };

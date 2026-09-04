@@ -579,6 +579,222 @@ class TestRemoveExpense:
         assert len(json.loads(trip_file.read_text())["expenses"]) == 2
 
 
+class TestEditExpense:
+    def setup_trip(self, trip_file):
+        run("init", "T", trip_file=trip_file)
+        run("add-person", "Alice", "Bob", "Charlie", trip_file=trip_file)
+        run(
+            "add",
+            "Dinner",
+            "--payer",
+            "Alice",
+            "--amount",
+            "60",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+        )
+        return json.loads(trip_file.read_text())["expenses"][0]["id"]
+
+    def test_edit_keeps_id_and_updates_fields(self, trip_file):
+        expense_id = self.setup_trip(trip_file)
+        run(
+            "edit-expense",
+            expense_id,
+            "Lunch",
+            "--payer",
+            "Bob",
+            "--amount",
+            "20",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+        )
+        data = json.loads(trip_file.read_text())
+        assert len(data["expenses"]) == 1
+        exp = data["expenses"][0]
+        assert exp["id"] == expense_id
+        assert exp["description"] == "Lunch"
+        assert exp["payer"] == "Bob"
+        assert exp["amount_cents"] == 2000
+        assert exp["participants"] == ["Alice", "Bob"]
+        assert "weights" not in exp
+
+    def test_edit_by_unique_prefix(self, trip_file):
+        expense_id = self.setup_trip(trip_file)
+        run(
+            "edit-expense",
+            expense_id[:8],
+            "Brunch",
+            "--payer",
+            "Alice",
+            "--amount",
+            "15",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+        )
+        data = json.loads(trip_file.read_text())
+        assert data["expenses"][0]["id"] == expense_id
+        assert data["expenses"][0]["description"] == "Brunch"
+        assert data["expenses"][0]["amount_cents"] == 1500
+
+    def test_edit_weighted_split(self, trip_file):
+        expense_id = self.setup_trip(trip_file)
+        run(
+            "edit-expense",
+            expense_id,
+            "Hotel",
+            "--payer",
+            "Alice",
+            "--amount",
+            "90",
+            "--with",
+            "Alice,Bob,Charlie",
+            "--weights",
+            "Alice=2,Bob=1,Charlie=1",
+            trip_file=trip_file,
+        )
+        exp = json.loads(trip_file.read_text())["expenses"][0]
+        assert exp["id"] == expense_id
+        assert exp["weights"] == [2, 1, 1]
+        assert exp["participants"] == ["Alice", "Bob", "Charlie"]
+
+    def test_edit_clears_weights_when_omitted(self, trip_file):
+        expense_id = self.setup_trip(trip_file)
+        run(
+            "edit-expense",
+            expense_id,
+            "Hotel",
+            "--payer",
+            "Alice",
+            "--amount",
+            "90",
+            "--with",
+            "Alice,Bob,Charlie",
+            "--weights",
+            "Alice=2,Bob=1,Charlie=1",
+            trip_file=trip_file,
+        )
+        run(
+            "edit-expense",
+            expense_id,
+            "Hotel",
+            "--payer",
+            "Alice",
+            "--amount",
+            "90",
+            "--with",
+            "Alice,Bob,Charlie",
+            trip_file=trip_file,
+        )
+        exp = json.loads(trip_file.read_text())["expenses"][0]
+        assert "weights" not in exp
+
+    def test_edit_unknown_id_fails(self, trip_file):
+        self.setup_trip(trip_file)
+        code = run(
+            "edit-expense",
+            "nonexistent",
+            "X",
+            "--payer",
+            "Alice",
+            "--amount",
+            "10",
+            "--with",
+            "Alice",
+            trip_file=trip_file,
+            expect_success=False,
+        )
+        assert code != 0
+
+    def test_edit_ambiguous_prefix_fails(self, trip_file):
+        from fairshare.models import Expense, Trip
+        from fairshare.storage import save
+
+        trip = Trip(
+            name="T",
+            people=("Alice", "Bob"),
+            expenses=(
+                Expense("aaaa-1111", "A", "Alice", 100, ("Alice", "Bob")),
+                Expense("aaaa-2222", "B", "Alice", 100, ("Alice", "Bob")),
+            ),
+        )
+        save(trip, trip_file)
+        code = run(
+            "edit-expense",
+            "aaaa",
+            "C",
+            "--payer",
+            "Alice",
+            "--amount",
+            "1",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+            expect_success=False,
+        )
+        assert code != 0
+        data = json.loads(trip_file.read_text())
+        assert data["expenses"][0]["description"] == "A"
+        assert data["expenses"][1]["description"] == "B"
+
+    def test_edit_empty_id_fails(self, trip_file):
+        self.setup_trip(trip_file)
+        code = run(
+            "edit-expense",
+            "   ",
+            "X",
+            "--payer",
+            "Alice",
+            "--amount",
+            "10",
+            "--with",
+            "Alice",
+            trip_file=trip_file,
+            expect_success=False,
+        )
+        assert code != 0
+
+    def test_edit_unknown_payer_fails(self, trip_file):
+        expense_id = self.setup_trip(trip_file)
+        code = run(
+            "edit-expense",
+            expense_id,
+            "X",
+            "--payer",
+            "Zara",
+            "--amount",
+            "10",
+            "--with",
+            "Alice",
+            trip_file=trip_file,
+            expect_success=False,
+        )
+        assert code != 0
+        assert json.loads(trip_file.read_text())["expenses"][0]["payer"] == "Alice"
+
+    def test_edit_then_balances(self, trip_file, capsys):
+        expense_id = self.setup_trip(trip_file)
+        run(
+            "edit-expense",
+            expense_id,
+            "Lunch",
+            "--payer",
+            "Alice",
+            "--amount",
+            "20",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+        )
+        run("balances", trip_file=trip_file)
+        out = capsys.readouterr().out
+        assert "Alice" in out
+        assert "Bob" in out
+        assert "10.00" in out
+
+
 class TestNoFileError:
     def test_missing_file_on_command_returns_error(self, tmp_path):
         missing = tmp_path / "missing.json"
@@ -605,3 +821,56 @@ class TestInterrupt:
 
         monkeypatch.setitem(_COMMAND_MAP, "list", _raise)
         assert main(["--file", str(trip_file), "list"]) == 130
+
+
+class TestPullPush:
+    HOST = "https://fair-share.example"
+    TRIP_ID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    def test_pull_writes_file_without_lock_fields(self, trip_file, monkeypatch):
+        body = {
+            "schema_version": 1,
+            "name": "Athens",
+            "photos_locked": True,
+            "pin_hash": "nope",
+            "people": ["Alice"],
+            "expenses": [],
+        }
+
+        def fake_request(method, url, payload=None):
+            assert method == "GET"
+            return 200, body
+
+        monkeypatch.setattr("fairshare.remote.request_json", fake_request)
+        run("pull", "--id", self.TRIP_ID, "--host", self.HOST, trip_file=trip_file)
+        data = json.loads(trip_file.read_text())
+        assert data["name"] == "Athens"
+        assert data["schema_version"] == 1
+        assert "photos_locked" not in data
+        assert "pin_hash" not in data
+
+    def test_pull_requires_host(self, trip_file, monkeypatch):
+        monkeypatch.delenv("FAIRSHARE_API", raising=False)
+        code = run("pull", "--id", self.TRIP_ID, trip_file=trip_file, expect_success=False)
+        assert code != 0
+
+    def test_push_prints_id_pin_and_url(self, trip_file, capsys, monkeypatch):
+        run("init", "Athens", trip_file=trip_file)
+        run("add-person", "Alice", trip_file=trip_file)
+
+        def fake_request(method, url, payload=None):
+            if method == "POST":
+                return 201, {
+                    "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "pin": "654321",
+                    "photos_token": "tok",
+                    "trip": {"schema_version": 1, "name": "Athens", "people": [], "expenses": []},
+                }
+            return 200, payload
+
+        monkeypatch.setattr("fairshare.remote.request_json", fake_request)
+        run("push", "--host", self.HOST, trip_file=trip_file)
+        out = capsys.readouterr().out
+        assert "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in out
+        assert "654321" in out
+        assert "/t/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in out

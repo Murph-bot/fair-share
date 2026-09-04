@@ -1,10 +1,11 @@
 import type { Config } from "@netlify/functions";
-import { PHOTO_ID_RE, PHOTO_RETENTION_MS } from "../../web/src/domain/photos";
+import { PHOTO_ID_RE, PHOTO_RETENTION_MS } from "../../packages/domain/src/photos";
+import { destroyCloudinaryAsset } from "./_shared/cloudinary";
 import { photosStore } from "./_shared/stores";
 
-export default async () => {
+export async function expireDuePhotos(now = Date.now()): Promise<void> {
   const store = photosStore();
-  const cutoff = Date.now() - PHOTO_RETENTION_MS;
+  const cutoff = now - PHOTO_RETENTION_MS;
   const { blobs } = await store.list();
 
   for (const blob of blobs) {
@@ -21,8 +22,20 @@ export default async () => {
     if (!Number.isFinite(created) || created > cutoff) {
       continue;
     }
+    const cloudinaryId = meta?.metadata?.cloudinaryId;
+    if (typeof cloudinaryId === "string" && cloudinaryId) {
+      try {
+        await destroyCloudinaryAsset(cloudinaryId);
+      } catch {
+        /* still drop the display blob so Moments cannot serve expired photos */
+      }
+    }
     await store.delete(blob.key);
   }
+}
+
+export default async () => {
+  await expireDuePhotos();
 };
 
 export const config: Config = {

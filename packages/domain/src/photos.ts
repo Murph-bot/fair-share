@@ -1,3 +1,5 @@
+import type { Trip } from "./trip";
+
 export const PHOTO_ID_RE = /^[a-f0-9]{32}$/;
 export const MAX_PHOTOS_PER_TRIP = 100;
 export const MAX_PHOTO_BYTES = 4_000_000;
@@ -11,3 +13,5 @@ export type PhotoRecord = {
   thumbUrl: string;
   originalUrl: string | null;
 };
+
+export type PublicTrip = Trip & { photos_locked?: boolean };

@@ -1,4 +1,4 @@
-import { PHOTO_MAX_EDGE } from "./domain/photos";
+import { PHOTO_MAX_EDGE } from "@fairshare/domain/photos";
 
 export async function compressImage(file: File): Promise<Blob> {
   let bitmap: ImageBitmap;

@@ -111,7 +111,7 @@ export type NewExpenseInput = {
   weights?: number[];
 };
 
-export function addExpense(trip: Trip, input: NewExpenseInput, id: string): Trip {
+function buildExpense(trip: Trip, input: NewExpenseInput, id: string): Expense {
   const payer = findCanonical(trip.people, input.payer);
   if (payer === undefined) {
     throw new UnknownPersonError(`Payer '${input.payer}' is not on this trip`);
@@ -134,29 +134,48 @@ export function addExpense(trip: Trip, input: NewExpenseInput, id: string): Trip
     weights: input.weights,
   };
   validateExpense(expense, trip.people);
-  return { ...trip, expenses: [...trip.expenses, expense] };
+  return expense;
 }
 
-export function removeExpense(trip: Trip, expenseId: string): Trip {
+function findExpense(trip: Trip, expenseId: string): Expense {
   const id = expenseId.trim();
   if (!id) {
     throw new ValidationError("Expense ID cannot be empty");
   }
 
   const exact = trip.expenses.find((e) => e.id === id);
-  const target = exact ?? (() => {
-    const matches = trip.expenses.filter((e) => e.id.startsWith(id));
-    if (matches.length === 0) {
-      throw new ExpenseNotFoundError(`No expense with id '${id}' found.`);
-    }
-    if (matches.length > 1) {
-      throw new ValidationError(
-        `Ambiguous expense id prefix ${JSON.stringify(id)}. Matches: ${matches.map((e) => e.id).join(", ")}`,
-      );
-    }
-    return matches[0];
-  })();
+  if (exact) {
+    return exact;
+  }
 
+  const matches = trip.expenses.filter((e) => e.id.startsWith(id));
+  if (matches.length === 0) {
+    throw new ExpenseNotFoundError(`No expense with id '${id}' found.`);
+  }
+  if (matches.length > 1) {
+    throw new ValidationError(
+      `Ambiguous expense id prefix ${JSON.stringify(id)}. Matches: ${matches.map((e) => e.id).join(", ")}`,
+    );
+  }
+  return matches[0];
+}
+
+export function addExpense(trip: Trip, input: NewExpenseInput, id: string): Trip {
+  const expense = buildExpense(trip, input, id);
+  return { ...trip, expenses: [...trip.expenses, expense] };
+}
+
+export function updateExpense(trip: Trip, expenseId: string, input: NewExpenseInput): Trip {
+  const target = findExpense(trip, expenseId);
+  const expense = buildExpense(trip, input, target.id);
+  return {
+    ...trip,
+    expenses: trip.expenses.map((item) => (item.id === target.id ? expense : item)),
+  };
+}
+
+export function removeExpense(trip: Trip, expenseId: string): Trip {
+  const target = findExpense(trip, expenseId);
   return { ...trip, expenses: trip.expenses.filter((e) => e.id !== target.id) };
 }
 
@@ -242,4 +261,14 @@ export function parseTrip(data: unknown): Trip {
     people,
     expenses,
   };
+}
+
+export function tripFileJson(trip: Trip): string {
+  const payload: Trip = {
+    schema_version: trip.schema_version,
+    name: trip.name,
+    people: trip.people,
+    expenses: trip.expenses,
+  };
+  return `${JSON.stringify(payload, null, 2)}\n`;
 }

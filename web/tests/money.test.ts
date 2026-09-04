@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ValidationError } from "../src/domain/errors";
-import { centsToEuro, parseAmount } from "../src/domain/money";
+import { ValidationError } from "@fairshare/domain/errors";
+import { centsToEuro, parseAmount } from "@fairshare/domain/money";
 
 describe("parseAmount", () => {
   it("parses a plain integer", () => {
