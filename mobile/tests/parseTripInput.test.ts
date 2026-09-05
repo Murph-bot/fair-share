@@ -21,10 +21,13 @@ describe("parseTripInput", () => {
 
   it("rejects invalid input", () => {
     expect(parseTripInput("")).toEqual({ ok: false, error: "Enter a trip ID or link" });
-    expect(parseTripInput("not a trip")).toEqual({ ok: false, error: "Paste a trip ID or /t/<id> link" });
+    expect(parseTripInput("not a trip")).toEqual({
+      ok: false,
+      error: "Paste a Fair Share link or the 32-character trip ID",
+    });
     expect(parseTripInput("https://fair-share-trips.netlify.app/t/123")).toEqual({
       ok: false,
-      error: "Paste a trip ID or /t/<id> link",
+      error: "Paste a Fair Share link or the 32-character trip ID",
     });
   });
 });

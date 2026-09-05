@@ -27,6 +27,10 @@ function tokenKey(tripId: string): string {
   return `fairshare.photos.token.${tripId}`;
 }
 
+function pinKey(tripId: string): string {
+  return `fairshare.photos.pin.${tripId}`;
+}
+
 export async function loadPhotoToken(tripId: string): Promise<string | undefined> {
   try {
     return (await store.getItem(tokenKey(tripId))) ?? undefined;
@@ -40,6 +44,30 @@ export async function savePhotoToken(tripId: string, token: string): Promise<voi
     await store.setItem(tokenKey(tripId), token);
   } catch {
     /* private mode / SecureStore quota */
+  }
+}
+
+export async function loadPhotoPin(tripId: string): Promise<string | undefined> {
+  try {
+    return (await store.getItem(pinKey(tripId))) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function savePhotoPin(tripId: string, pin: string): Promise<void> {
+  try {
+    await store.setItem(pinKey(tripId), pin);
+  } catch {
+    /* private mode / SecureStore quota */
+  }
+}
+
+export async function clearPhotoPin(tripId: string): Promise<void> {
+  try {
+    await store.removeItem(pinKey(tripId));
+  } catch {
+    /* ignore */
   }
 }
 

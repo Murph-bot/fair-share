@@ -22,6 +22,7 @@ import {
 } from "../api/photoApi";
 import { loadPhotoToken } from "../api/photoSession";
 import type { PhotoRecord, PublicTrip } from "../domain/photos";
+import { Colors } from "../constants/theme";
 import { photoAccessState, shouldOfferLockCta } from "../utils/photoAccess";
 import { pickCompressedPhoto } from "../utils/pickPhoto";
 
@@ -212,11 +213,11 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {busy ? <ActivityIndicator color="#7c4a20" /> : null}
-      {photos.length === 0 ? <Text style={styles.muted}>No photos yet.</Text> : null}
+      {photos.length === 0 ? <Text style={styles.muted}>No photos yet. Add one above.</Text> : null}
       <View style={styles.grid}>
         {photos.map((photo) => (
           <View key={photo.id} style={styles.tile}>
-            <Image source={{ uri: photo.thumbUrl }} style={styles.thumb} accessibilityLabel="Trip photo" />
+            <Image source={{ uri: photo.thumbUrl }} style={styles.thumb} accessibilityLabel="Photo from trip" />
             <View style={styles.tileActions}>
               {photo.originalUrl?.startsWith("https://") ? (
                 <Pressable onPress={() => void Linking.openURL(photo.originalUrl as string)} accessibilityRole="link">
@@ -239,31 +240,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   muted: {
-    color: "#6b7280",
+    color: Colors.light.textSecondary,
     fontSize: 14,
   },
   error: {
-    color: "#b91c1c",
+    color: Colors.light.negative,
     fontWeight: "600",
   },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: "#d6c7b0",
+    borderColor: Colors.light.rule,
     borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.light.background,
+    color: Colors.light.text,
     fontSize: 16,
   },
   button: {
     minHeight: 48,
     borderRadius: 12,
-    backgroundColor: "#7c4a20",
+    backgroundColor: Colors.light.text,
     alignItems: "center",
     justifyContent: "center",
   },
   buttonText: {
-    color: "#fff",
+    color: Colors.light.background,
     fontWeight: "700",
   },
   secondary: {
@@ -297,11 +299,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   link: {
-    color: "#7c4a20",
+    color: Colors.light.tint,
     fontWeight: "700",
   },
   danger: {
-    color: "#b91c1c",
+    color: Colors.light.negative,
     fontWeight: "700",
   },
 });

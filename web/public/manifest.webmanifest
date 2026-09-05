@@ -1,6 +1,7 @@
 {
-  "name": "Fair share",
-  "short_name": "Fair share",
+  "name": "Fair Share",
+  "short_name": "Fair Share",
+  "description": "Split trip expenses fairly. No accounts, no ads.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f0e6",

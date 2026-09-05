@@ -11,6 +11,7 @@ import { uploadOriginalToCloudinary } from "../cloudinary-upload";
 import { MAX_ORIGINAL_BYTES } from "@fairshare/domain/cloudinary";
 import { compressImage } from "../compress-image";
 import type { PhotoRecord } from "@fairshare/domain/photos";
+import { announce } from "../announce";
 import { escapeHtml } from "../escape";
 import { loadPhotoToken, savePhotoPin, savePhotoToken } from "../photo-session";
 
@@ -87,7 +88,7 @@ function unlockedHtml(showLockCta: boolean = false): string {
         <input id="new-pin" name="pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="6-digit PIN (optional)">
         <button type="submit">Lock photos with a PIN</button>
       </form>
-      <p id="lock-error" class="err" hidden></p>
+      <p id="lock-error" class="err" role="alert" aria-live="assertive" hidden></p>
     </div>
   `
     : "";
@@ -95,7 +96,7 @@ function unlockedHtml(showLockCta: boolean = false): string {
     <form id="photo-form" class="stack">
       <label for="photo-file">Add a photo</label>
       <input id="photo-file" name="photo" type="file" accept="image/*">
-      <p id="photo-error" class="err" hidden></p>
+      <p id="photo-error" class="err" role="alert" aria-live="assertive" hidden></p>
     </form>
     ${lockCta}
     <div id="photo-list"><p class="muted">Loading photos…</p></div>
@@ -110,7 +111,7 @@ function lockedHtml(): string {
       <input id="photo-pin" name="pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="6-digit PIN" required>
       <button type="submit">Unlock</button>
     </form>
-    <p id="pin-error" class="err" hidden></p>
+    <p id="pin-error" class="err" role="alert" aria-live="assertive" hidden></p>
   `;
 }
 
@@ -162,9 +163,13 @@ export function bindMoments(root: HTMLElement, tripId: string, trip: PublicTrip)
         await navigator.clipboard.writeText(res.pin);
         if (copyPin) {
           copyPin.textContent = "PIN copied";
+          window.setTimeout(() => {
+            copyPin.textContent = "Copy PIN";
+          }, 2000);
         }
+        announce("Photos locked. PIN copied.");
       } catch {
-        /* clipboard write may fail without user gesture */
+        announce(`Photos locked. PIN: ${res.pin}`);
       }
       bindMoments(root, tripId, { ...trip, photos_locked: true });
     } catch (err) {
@@ -262,6 +267,7 @@ async function fillList(body: HTMLElement, tripId: string): Promise<void> {
           button.textContent = "Deleting…";
           setLocalError(photoError, null);
           await deletePhoto(tripId, photoId);
+          announce("Photo deleted");
           await fillList(body, tripId);
         } catch (err) {
           list.querySelectorAll<HTMLButtonElement>("[data-delete-photo]").forEach((b) => {

@@ -12,6 +12,7 @@ export {
   removeExpense,
   parseTrip,
   createTrip,
+  tripFileJson,
   type Trip,
   type Expense,
   type NewExpenseInput,

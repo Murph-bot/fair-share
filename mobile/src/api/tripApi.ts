@@ -10,6 +10,40 @@ function asPublicTrip(raw: unknown): PublicTrip {
   return { ...trip, photos_locked: photosLocked };
 }
 
+export async function createRemoteTrip(name: string): Promise<{
+  id: string;
+  trip: PublicTrip;
+  pin: string;
+  photos_token: string;
+}> {
+  const response = await fetch(apiUrl("/api/trips"), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
+
+  const body = (await response.json()) as {
+    id: string;
+    trip: unknown;
+    pin: string;
+    photos_token: string;
+  };
+
+  return {
+    id: body.id,
+    trip: asPublicTrip(body.trip),
+    pin: body.pin,
+    photos_token: body.photos_token,
+  };
+}
+
 export async function fetchTrip(tripId: string): Promise<PublicTrip> {
   const response = await fetch(apiUrl(`/api/trips/${tripId}`), {
     method: "GET",

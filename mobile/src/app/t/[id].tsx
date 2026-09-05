@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Link, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -11,13 +20,17 @@ import {
   parseAmount,
   removeExpense,
   settle,
+  tripFileJson,
   updateExpense,
   type Expense,
   type NewExpenseInput,
   type Trip,
 } from "../../domain";
+import { loadPhotoPin } from "../../api/photoSession";
+import { apiBaseUrl } from "../../api/client";
 import { Moments } from "../../components/moments";
 import { useTrip } from "../../hooks/useTrip";
+import { Colors } from "../../constants/theme";
 
 function createExpenseId(): string {
   return `expense-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -150,6 +163,63 @@ export default function TripScreen() {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [photoPin, setPhotoPin] = useState<string | null>(null);
+
+  const tripUrl = useMemo(() => {
+    if (!tripId) {
+      return "";
+    }
+    return `${apiBaseUrl()}/t/${tripId}`;
+  }, [tripId]);
+
+  useEffect(() => {
+    if (!tripId) {
+      return;
+    }
+    let cancelled = false;
+    void loadPhotoPin(tripId).then((pin) => {
+      if (!cancelled) {
+        setPhotoPin(pin ?? null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId]);
+
+  const handleShareTrip = async () => {
+    if (!tripUrl) {
+      return;
+    }
+    try {
+      await Share.share({ message: `Join the trip on Fair Share: ${tripUrl}` });
+    } catch {
+      // User cancelled or share failed.
+    }
+  };
+
+  const handleSharePin = async () => {
+    if (!photoPin) {
+      Alert.alert("No PIN", "Photos on this trip are not locked.");
+      return;
+    }
+    try {
+      await Share.share({ message: `Photos PIN for the trip: ${photoPin}` });
+    } catch {
+      // User cancelled or share failed.
+    }
+  };
+
+  const handleExportJson = async () => {
+    if (!trip) {
+      return;
+    }
+    try {
+      await Share.share({ message: tripFileJson(trip), title: `${trip.name} - Fair Share` });
+    } catch {
+      // User cancelled or share failed.
+    }
+  };
 
   const editingExpense = useMemo(
     () => trip?.expenses.find((expense) => expense.id === editingExpenseId) ?? null,
@@ -353,7 +423,7 @@ export default function TripScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
-          <Text style={styles.title}>Trip not available</Text>
+          <Text style={styles.title}>Trip not found</Text>
           <ErrorBanner message={error} />
           <View style={styles.rowGap}>
             <StepButton label="Retry" onPress={() => void reload()} />
@@ -379,10 +449,22 @@ export default function TripScreen() {
             <Text style={styles.mutedText}>Trip ID {tripId}</Text>
           </View>
           <Link href="/" asChild>
-            <Pressable style={styles.secondaryButton} accessibilityRole="button">
+            <Pressable style={styles.secondaryButton} accessibilityRole="button" accessibilityLabel="Change trip">
               <Text style={styles.secondaryButtonText}>Change trip</Text>
             </Pressable>
           </Link>
+        </View>
+
+        <View style={styles.actionRow}>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleShareTrip()} accessibilityRole="button" accessibilityLabel="Share trip link">
+            <Text style={styles.secondaryButtonText}>Share trip</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleSharePin()} accessibilityRole="button" accessibilityLabel="Share photos PIN">
+            <Text style={styles.secondaryButtonText}>Share PIN</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleExportJson()} accessibilityRole="button" accessibilityLabel="Export trip JSON">
+            <Text style={styles.secondaryButtonText}>Export JSON</Text>
+          </Pressable>
         </View>
 
         <ErrorBanner message={error} />
@@ -496,7 +578,7 @@ export default function TripScreen() {
         </Section>
 
         <Section title="Expenses">
-          {trip.expenses.length === 0 ? <Text style={styles.mutedText}>No expenses yet.</Text> : null}
+          {trip.expenses.length === 0 ? <Text style={styles.mutedText}>No expenses yet. Add one above.</Text> : null}
           <View style={styles.listGap}>
             {trip.expenses.map((expense) => (
               <View key={expense.id} style={styles.card}>
@@ -519,6 +601,9 @@ export default function TripScreen() {
         </Section>
 
         <Section title="Balances">
+          {trip.expenses.length === 0 ? null : (
+            <Text style={styles.explainer}>Positive = owed to this person. Negative = this person owes money.</Text>
+          )}
           <View style={styles.listGap}>
             {Object.entries(balances ?? {})
               .sort(([a], [b]) => a.localeCompare(b))
@@ -534,7 +619,7 @@ export default function TripScreen() {
         </Section>
 
         <Section title="Who pays whom">
-          {payments.length === 0 ? <Text style={styles.mutedText}>All settled - no payments needed.</Text> : null}
+          {payments.length === 0 ? <Text style={styles.mutedText}>All settled — no payments needed.</Text> : null}
           <View style={styles.listGap}>
             {payments.map((payment) => (
               <View key={`${payment.frm}-${payment.to}-${payment.amount_cents}`} style={styles.balanceRow}>
@@ -556,7 +641,7 @@ export default function TripScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f5f0e6",
+    backgroundColor: Colors.light.background,
   },
   scrollContent: {
     padding: 20,
@@ -575,24 +660,31 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#1f2937",
+    color: Colors.light.text,
   },
   mutedText: {
-    color: "#6b7280",
+    color: Colors.light.textSecondary,
     fontSize: 14,
   },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
   section: {
-    backgroundColor: "#fff",
+    backgroundColor: Colors.light.backgroundElement,
     borderRadius: 16,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: "#e7ddcd",
+    borderColor: Colors.light.rule,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#1f2937",
+    color: Colors.light.text,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   field: {
     gap: 8,
@@ -600,15 +692,16 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
+    color: Colors.light.textSecondary,
   },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: "#d6c7b0",
+    borderColor: Colors.light.rule,
     borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.light.background,
+    color: Colors.light.text,
     fontSize: 16,
   },
   fieldRow: {
@@ -645,33 +738,33 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: "#c4b39a",
+    borderColor: Colors.light.rule,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.light.background,
   },
   chipSelected: {
-    backgroundColor: "#7c4a20",
-    borderColor: "#7c4a20",
+    backgroundColor: Colors.light.text,
+    borderColor: Colors.light.text,
   },
   chipText: {
-    color: "#374151",
+    color: Colors.light.text,
     fontWeight: "600",
   },
   chipTextSelected: {
-    color: "#fff",
+    color: Colors.light.background,
   },
   stepButton: {
     minHeight: 48,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: "#7c4a20",
+    backgroundColor: Colors.light.text,
     alignItems: "center",
     justifyContent: "center",
   },
   stepButtonText: {
-    color: "#fff",
+    color: Colors.light.background,
     fontWeight: "700",
   },
   secondaryButton: {
@@ -695,7 +788,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dangerButtonText: {
-    color: "#b91c1c",
+    color: Colors.light.negative,
     fontWeight: "700",
   },
   errorBanner: {
@@ -713,15 +806,19 @@ const styles = StyleSheet.create({
     borderColor: "#eadfcf",
     padding: 14,
     gap: 8,
-    backgroundColor: "#fff",
+    backgroundColor: Colors.light.background,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1f2937",
+    color: Colors.light.text,
   },
   cardBody: {
-    color: "#4b5563",
+    color: Colors.light.textSecondary,
+  },
+  explainer: {
+    color: Colors.light.textSecondary,
+    fontSize: 14,
   },
   balanceRow: {
     flexDirection: "row",
@@ -731,13 +828,13 @@ const styles = StyleSheet.create({
   },
   balanceValue: {
     fontWeight: "700",
-    color: "#1f2937",
+    color: Colors.light.text,
   },
   positive: {
-    color: "#047857",
+    color: Colors.light.positive,
   },
   negative: {
-    color: "#b91c1c",
+    color: Colors.light.negative,
   },
   weightList: {
     gap: 8,
@@ -750,7 +847,7 @@ const styles = StyleSheet.create({
   weightName: {
     minWidth: 90,
     fontWeight: "600",
-    color: "#374151",
+    color: Colors.light.text,
   },
   weightInput: {
     flex: 1,

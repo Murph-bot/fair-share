@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addExpense, addPerson, createTrip, type Trip } from "../src/domain";
-import { fetchTrip, saveTrip } from "../src/api/tripApi";
+import { createRemoteTrip, fetchTrip, saveTrip } from "../src/api/tripApi";
 
 const tripId = "ff4765be974564a2503e8f94f67538dd";
 
@@ -21,6 +21,30 @@ afterEach(() => {
 });
 
 describe("tripApi", () => {
+  it("creates a remote trip", async () => {
+    const trip = createTrip("Audit Test");
+    const fetchSpy = vi.fn().mockResolvedValue(
+      mockJsonResponse({
+        id: tripId,
+        trip,
+        pin: "123456",
+        photos_token: "token-123",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(createRemoteTrip("Audit Test")).resolves.toEqual({
+      id: tripId,
+      trip: { ...trip, photos_locked: false },
+      pin: "123456",
+      photos_token: "token-123",
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://fair-share-trips.netlify.app/api/trips",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("fetches and parses a trip", async () => {
     const trip = addExpense(
       addPerson(addPerson(createTrip("CLI push check"), "Alice"), "Bob"),

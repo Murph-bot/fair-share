@@ -29,6 +29,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fairshare",
         description="Split expenses fairly among a group of people.",
+        epilog=(
+            "Quick start:\n"
+            "  fairshare init 'Athens weekend'\n"
+            "  fairshare add-person Alice Bob\n"
+            "  fairshare add Dinner --payer Alice --amount 60 --with Alice,Bob\n"
+            "  fairshare settle"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--file",

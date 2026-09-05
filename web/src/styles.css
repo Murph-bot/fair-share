@@ -14,8 +14,16 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  animation: none !important;
-  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 html,
@@ -222,10 +230,48 @@ button {
   background: var(--ink);
   color: var(--cream);
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--brown);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--brown);
+  outline-offset: 2px;
 }
 
 button:disabled {
   opacity: 0.55;
+}
+
+button.secondary,
+button[type="button"].secondary {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--brown);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: var(--cream);
+}
+
+button.link {
+  background: transparent;
+  color: var(--brown);
+  border: none;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  min-height: auto;
+  padding: 0;
+}
+
+button.link:hover:not(:disabled) {
+  color: var(--ink);
 }
 
 .text-btn {
@@ -349,4 +395,14 @@ fieldset {
   .moments-grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .topbar-actions {
+    flex-direction: row;
+  }
+}
+
+.explainer {
+  font-size: 0.92rem;
+  color: var(--brown);
+  margin: 0.35rem 0 0.75rem;
 }

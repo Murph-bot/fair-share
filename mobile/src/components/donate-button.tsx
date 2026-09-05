@@ -2,6 +2,7 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { Pressable, StyleSheet, Text } from "react-native";
 
+import { Colors } from "../constants/theme";
 import { resolveDonateUrl } from "../utils/donate";
 
 export function DonateButton() {
@@ -30,6 +31,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 12,
     backgroundColor: "#efe5d4",
+    borderWidth: 1,
+    borderColor: Colors.light.rule,
     alignItems: "center",
     justifyContent: "center",
   },

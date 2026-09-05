@@ -4,7 +4,7 @@ export type ParseTripInputResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
 
-const INVALID_MESSAGE = "Paste a trip ID or /t/<id> link";
+const INVALID_MESSAGE = "Paste a Fair Share link or the 32-character trip ID";
 
 function extractTripId(input: string): string | null {
   const directMatch = /(?:^|\/)t\/([a-f0-9]{32})(?:[/?#].*)?$/i.exec(input);

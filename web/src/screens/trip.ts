@@ -12,6 +12,7 @@ import {
   type Expense,
   type Trip,
 } from "@fairshare/domain";
+import { announce } from "../announce";
 import { escapeHtml } from "../escape";
 import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
@@ -52,14 +53,14 @@ async function persist(id: string, trip: PublicTrip, banner: HTMLElement): Promi
 
 function peopleList(trip: Trip): string {
   if (trip.people.length === 0) {
-    return `<p class="muted">Add at least one person before recording expenses.</p>`;
+    return `<p class="muted">Add the people who are sharing expenses.</p>`;
   }
   return `<ul class="people">${trip.people.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>`;
 }
 
 function expenseCards(trip: Trip): string {
   if (trip.expenses.length === 0) {
-    return `<p class="muted">No expenses yet.</p>`;
+    return `<p class="muted">No expenses yet. Add one above.</p>`;
   }
   return `<ul class="expenses">${trip.expenses
     .map((e) => {
@@ -83,7 +84,7 @@ function expenseCards(trip: Trip): string {
 
 function balancesBlock(trip: Trip): string {
   if (trip.expenses.length === 0) {
-    return `<p class="muted">No expenses recorded.</p>`;
+    return `<p class="muted">No expenses recorded. Add expenses to see who owes what.</p>`;
   }
   const balances = computeBalances(trip);
   const rows = Object.keys(balances)
@@ -94,7 +95,7 @@ function balancesBlock(trip: Trip): string {
       return `<li><span>${escapeHtml(person)}</span><span class="${amount < 0 ? "neg" : "pos"}">${sign}${centsToEuro(amount)}</span></li>`;
     })
     .join("");
-  return `<ul class="ledger">${rows}</ul>`;
+  return `<p class="muted explainer">Positive = owed to this person. Negative = this person owes money.</p><ul class="ledger">${rows}</ul>`;
 }
 
 function settleBlock(trip: Trip): string {
@@ -168,7 +169,7 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
         <input type="checkbox" id="unequal" name="unequal"${unequal}>
         <span>Unequal shares (integer weights)</span>
       </label>
-      <p id="expense-error" class="err" hidden></p>
+      <p id="expense-error" class="err" role="alert" aria-live="assertive" hidden></p>
       <button type="submit">${submitLabel}</button>
       ${cancel}
     </form>
@@ -190,7 +191,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         <button type="button" id="download-json">Download JSON</button>
       </div>
     </header>
-    <p id="banner" class="err" hidden></p>
+    <p id="banner" class="err" role="alert" aria-live="assertive" hidden></p>
     <main class="page trip">
       <section class="block">
         <h2>People</h2>
@@ -200,7 +201,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
           <input id="person-name" name="name" type="text" required maxlength="40" autocomplete="off" placeholder="Name">
           <button type="submit">Add</button>
         </form>
-        <p id="person-error" class="err" hidden></p>
+        <p id="person-error" class="err" role="alert" aria-live="assertive" hidden></p>
       </section>
       <section class="block">
         <h2>${editing ? "Edit expense" : "Add expense"}</h2>
@@ -229,29 +230,34 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     root.classList.toggle("show-weights", unequal.checked);
   });
 
-  root.querySelector("#copy-pin")?.addEventListener("click", async () => {
+  async function copyWithFeedback(buttonId: string, label: string, value: string): Promise<void> {
+    const btn = root.querySelector(`#${buttonId}`) as HTMLButtonElement | null;
+    if (!btn) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      announce(`${label} copied`);
+      const original = btn.textContent ?? label;
+      btn.textContent = `${label} copied`;
+      window.setTimeout(() => {
+        btn.textContent = original;
+      }, 2000);
+    } catch {
+      window.prompt(`Copy this ${label.toLowerCase()}`, value);
+    }
+  }
+
+  root.querySelector("#copy-pin")?.addEventListener("click", () => {
     const pin = loadPhotoPin(id);
     if (!pin) {
       return;
     }
-    try {
-      await navigator.clipboard.writeText(pin);
-      const btn = root.querySelector("#copy-pin") as HTMLButtonElement;
-      btn.textContent = "PIN copied";
-    } catch {
-      window.prompt("Copy this photos PIN", pin);
-    }
+    void copyWithFeedback("copy-pin", "PIN", pin);
   });
 
-  root.querySelector("#copy-link")?.addEventListener("click", async () => {
-    const url = window.location.href;
-    try {
-      await navigator.clipboard.writeText(url);
-      const btn = root.querySelector("#copy-link") as HTMLButtonElement;
-      btn.textContent = "Copied";
-    } catch {
-      window.prompt("Copy this link", url);
-    }
+  root.querySelector("#copy-link")?.addEventListener("click", () => {
+    void copyWithFeedback("copy-link", "Link", window.location.href);
   });
 
   root.querySelector("#download-json")?.addEventListener("click", () => {
@@ -346,15 +352,20 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((button) => {
+    const description = button.getAttribute("aria-label")?.replace(/^Remove /, "") ?? "this expense";
     button.addEventListener("click", async () => {
       const expenseId = button.dataset.remove;
       if (!expenseId) {
+        return;
+      }
+      if (!window.confirm(`Remove "${description}"?`)) {
         return;
       }
       try {
         const next = removeExpense(trip, expenseId);
         setBusy(root, true);
         const saved = await persist(id, next, banner);
+        announce(`Removed "${description}"`);
         const stillEditing = editingId && expenseId !== editingId ? editingId : null;
         paint(root, id, saved, stillEditing);
       } catch (err) {
