@@ -20,8 +20,10 @@ import {
   addPerson,
   centsToEuro,
   computeBalances,
+  movePerson,
   parseAmount,
   removeExpense,
+  renamePerson,
   settle,
   t,
   tripFileJson,
@@ -172,6 +174,7 @@ export default function TripScreen() {
   const { trip, loading, saving, error, reload, mutate } = useTrip(tripId);
   const [personName, setPersonName] = useState("");
   const [personError, setPersonError] = useState<string | null>(null);
+  const [editingPerson, setEditingPerson] = useState<{ old: string; draft: string } | null>(null);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -288,6 +291,36 @@ export default function TripScreen() {
     if (success) {
       setPersonName("");
     }
+  };
+
+  const handleRenamePerson = async () => {
+    if (!trip || !editingPerson) {
+      return;
+    }
+
+    const name = editingPerson.draft.trim();
+    if (!name) {
+      setPersonError(t("Enter a person name"));
+      return;
+    }
+    if (name === editingPerson.old) {
+      setEditingPerson(null);
+      return;
+    }
+
+    setPersonError(null);
+    const success = await mutate((current) => renamePerson(current, editingPerson.old, name));
+    if (success) {
+      setEditingPerson(null);
+    }
+  };
+
+  const handleMovePerson = async (person: string, direction: "up" | "down") => {
+    if (!trip) {
+      return;
+    }
+    setPersonError(null);
+    await mutate((current) => movePerson(current, person, direction));
   };
 
   const handleRemoveExpense = (expenseId: string, description: string) => {
@@ -493,12 +526,54 @@ export default function TripScreen() {
 
         <Section styles={styles} title={t("People")}>
           <View style={styles.rowWrap}>
-            {trip.people.map((person) => (
-              <View key={person} style={styles.personTag}>
+            {trip.people.map((person, index) => (
+              <Pressable
+                key={person}
+                style={styles.personTag}
+                onPress={() => setEditingPerson({ old: person, draft: person })}
+                onLongPress={() =>
+                  Alert.alert(
+                    person,
+                    undefined,
+                    [
+                      { text: t("Cancel"), style: "cancel" },
+                      {
+                        text: t("Rename"),
+                        onPress: () => setEditingPerson({ old: person, draft: person }),
+                      },
+                      ...(index > 0
+                        ? [{ text: t("Move up"), onPress: () => void handleMovePerson(person, "up") }]
+                        : []),
+                      ...(index < trip.people.length - 1
+                        ? [{ text: t("Move down"), onPress: () => void handleMovePerson(person, "down") }]
+                        : []),
+                    ],
+                    { cancelable: true },
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel={t("Edit {{name}}", { name: person })}
+              >
                 <Text style={styles.personTagText}>{person}</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
+
+          {editingPerson ? (
+            <View style={styles.fieldRow}>
+              <View style={styles.flexGrow}>
+                <Field
+                  styles={styles}
+                  label={t("Rename {{name}}", { name: editingPerson.old })}
+                  value={editingPerson.draft}
+                  onChangeText={(value) => setEditingPerson({ ...editingPerson, draft: value })}
+                  placeholder={t("Name")}
+                />
+              </View>
+              <StepButton styles={styles} label={t("Save")} onPress={() => void handleRenamePerson()} />
+              <StepButton styles={styles} label={t("Cancel")} onPress={() => setEditingPerson(null)} />
+            </View>
+          ) : null}
 
           <View style={styles.fieldRow}>
             <View style={styles.flexGrow}>

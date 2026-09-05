@@ -5,6 +5,8 @@ import {
   addExpense,
   addPerson,
   centsToEuro,
+  movePerson,
+  renamePerson,
   computeBalances,
   parseAmount,
   removeExpense,
@@ -58,7 +60,18 @@ function peopleList(trip: Trip): string {
   if (trip.people.length === 0) {
     return `<p class="muted">${t("Add the people who are sharing expenses.")}</p>`;
   }
-  return `<ul class="people">${trip.people.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>`;
+  return `<ul class="people">${trip.people
+    .map(
+      (p, index) =>
+        `<li><span class="person-name">${escapeHtml(p)}</span>` +
+        ` <button type="button" class="text-btn" data-rename-person="${escapeHtml(p)}" aria-label="${t("Rename {{name}}", { name: escapeHtml(p) })}">${t("Rename")}</button>` +
+        (index > 0 ? ` <button type="button" class="text-btn" data-move-person="${escapeHtml(p)}" data-direction="up" aria-label="${t("Move {{name}} up", { name: escapeHtml(p) })}">↑</button>` : "") +
+        (index < trip.people.length - 1
+          ? ` <button type="button" class="text-btn" data-move-person="${escapeHtml(p)}" data-direction="down" aria-label="${t("Move {{name}} down", { name: escapeHtml(p) })}">↓</button>`
+          : "") +
+        `</li>`,
+    )
+    .join("")}</ul>`;
 }
 
 function expenseCards(trip: Trip): string {
@@ -230,10 +243,10 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         <h1>${escapeHtml(trip.name)}</h1>
       </div>
       <div class="topbar-actions">
-        <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"}>${t("Copy PIN")}</button>
-        <button type="button" id="copy-link">${t("Copy link")}</button>
-        <button type="button" id="show-qr">${t("Show QR")}</button>
-        <button type="button" id="download-json">${t("Download JSON")}</button>
+        <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"} title="${t("Copy the 6-digit PIN for the trip photos")}">${t("Copy PIN")}</button>
+        <button type="button" id="copy-link" title="${t("Copy the trip link to share")}">${t("Copy link")}</button>
+        <button type="button" id="show-qr" title="${t("Show a QR code for the trip link")}">${t("Show QR")}</button>
+        <button type="button" id="download-json" title="${t("Download the trip as a JSON file")}">${t("Download JSON")}</button>
         ${languageButtonHtml()}
         ${themeButtonHtml(themeLabel)}
       </div>
@@ -370,6 +383,45 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         setBusy(root, false);
       }
       setBanner(personError, err instanceof Error ? err.message : t("Could not add person"));
+    }
+  });
+
+  root.querySelector(".people")?.addEventListener("click", async (event) => {
+    const button = (event.target as HTMLElement).closest("button");
+    if (!button) {
+      return;
+    }
+    const renamePersonName = button.getAttribute("data-rename-person");
+    const movePersonName = button.getAttribute("data-move-person");
+    const direction = button.getAttribute("data-direction") as "up" | "down" | null;
+    if (renamePersonName) {
+      const newName = window.prompt(t("New name for {{name}}", { name: renamePersonName }), renamePersonName);
+      if (!newName || newName.trim() === renamePersonName) {
+        return;
+      }
+      try {
+        setBusy(root, true);
+        const next = renamePerson(trip, renamePersonName, newName);
+        const saved = await persist(id, next, banner);
+        paint(root, id, saved, editingId);
+      } catch (err) {
+        if (!saveLock) {
+          setBusy(root, false);
+        }
+        setBanner(personError, err instanceof Error ? err.message : t("Could not rename person"));
+      }
+    } else if (movePersonName && direction) {
+      try {
+        setBusy(root, true);
+        const next = movePerson(trip, movePersonName, direction);
+        const saved = await persist(id, next, banner);
+        paint(root, id, saved, editingId);
+      } catch (err) {
+        if (!saveLock) {
+          setBusy(root, false);
+        }
+        setBanner(personError, err instanceof Error ? err.message : t("Could not reorder people"));
+      }
     }
   });
 

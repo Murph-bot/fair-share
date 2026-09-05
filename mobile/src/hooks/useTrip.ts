@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchTrip, saveTrip } from "../api/tripApi";
+import { saveRecentTrip } from "../api/recentTrips";
 import type { Trip } from "../domain";
 import type { PublicTrip } from "../domain/photos";
 
@@ -43,6 +44,7 @@ export function useTrip(tripId: string | null): UseTripResult {
       const nextTrip = await fetchTrip(tripId);
       tripRef.current = nextTrip;
       setTrip(nextTrip);
+      void saveRecentTrip(tripId, nextTrip.name);
     } catch (caught) {
       setError(errorMessage(caught));
       setTrip(null);

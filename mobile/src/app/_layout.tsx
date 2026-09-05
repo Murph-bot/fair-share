@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, useColorScheme } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import { configurePhotoSessionStore } from "../api/photoSession";
+import { configureStorage } from "../api/storage";
 import { createSecureTokenStore } from "../api/secureTokenStore";
 import { Colors, type ColorTheme } from "../constants/theme";
 
@@ -39,7 +39,7 @@ export default function RootLayout() {
       if (cancelled) {
         return;
       }
-      configurePhotoSessionStore(store);
+      configureStorage(store);
       setStoreReady(true);
     });
     return () => {

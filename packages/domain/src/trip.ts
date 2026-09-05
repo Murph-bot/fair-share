@@ -103,6 +103,49 @@ export function addPerson(trip: Trip, rawName: string): Trip {
   return { ...trip, people: [...trip.people, name] };
 }
 
+export function renamePerson(trip: Trip, rawOldName: string, rawNewName: string): Trip {
+  const oldName = findCanonical(trip.people, rawOldName);
+  if (!oldName) {
+    throw new UnknownPersonError(`Person '${rawOldName}' is not on this trip`);
+  }
+  const newName = normalizePersonName(rawNewName);
+  if (newName === oldName) {
+    return trip;
+  }
+  if (findCanonical(trip.people, newName) !== undefined) {
+    throw new ValidationError(`A person named '${newName}' is already on this trip`);
+  }
+
+  const people = trip.people.map((person) => (person === oldName ? newName : person));
+  const expenses = trip.expenses.map((expense) => ({
+    ...expense,
+    payer: expense.payer === oldName ? newName : expense.payer,
+    participants: expense.participants.map((participant) =>
+      participant === oldName ? newName : participant,
+    ),
+  }));
+
+  return { ...trip, people, expenses };
+}
+
+export function movePerson(trip: Trip, rawName: string, direction: "up" | "down"): Trip {
+  const name = findCanonical(trip.people, rawName);
+  if (!name) {
+    throw new UnknownPersonError(`Person '${rawName}' is not on this trip`);
+  }
+  const index = trip.people.indexOf(name);
+  if (index === -1) {
+    return trip;
+  }
+  const newIndex = direction === "up" ? index - 1 : index + 1;
+  if (newIndex < 0 || newIndex >= trip.people.length) {
+    return trip;
+  }
+  const people = [...trip.people];
+  [people[index], people[newIndex]] = [people[newIndex], people[index]];
+  return { ...trip, people };
+}
+
 export type NewExpenseInput = {
   description: string;
   payer: string;
@@ -261,6 +304,44 @@ export function parseTrip(data: unknown): Trip {
     people,
     expenses,
   };
+}
+
+export function createExampleTrip(name: string): Trip {
+  let trip = createTrip(name);
+  trip = addPerson(trip, "Alice");
+  trip = addPerson(trip, "Bob");
+  trip = addPerson(trip, "Charlie");
+  trip = addExpense(
+    trip,
+    {
+      description: "Dinner",
+      payer: "Alice",
+      amount_cents: 9000,
+      participants: ["Alice", "Bob", "Charlie"],
+    },
+    `expense-${newTripId()}`,
+  );
+  trip = addExpense(
+    trip,
+    {
+      description: "Taxi",
+      payer: "Bob",
+      amount_cents: 3000,
+      participants: ["Alice", "Bob", "Charlie"],
+    },
+    `expense-${newTripId()}`,
+  );
+  trip = addExpense(
+    trip,
+    {
+      description: "Hotel",
+      payer: "Charlie",
+      amount_cents: 24000,
+      participants: ["Alice", "Bob", "Charlie"],
+    },
+    `expense-${newTripId()}`,
+  );
+  return trip;
 }
 
 export function tripFileJson(trip: Trip): string {

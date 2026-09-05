@@ -1,4 +1,4 @@
-import type { Trip } from "@fairshare/domain";
+import { createExampleTrip, type Trip } from "@fairshare/domain";
 import type { PhotoRecord } from "@fairshare/domain/photos";
 import { loadPhotoToken } from "./photo-session";
 
@@ -56,6 +56,23 @@ export async function fetchTrip(id: string): Promise<PublicTrip> {
     throw new Error(await readError(res));
   }
   return (await res.json()) as PublicTrip;
+}
+
+export async function createRemoteDemoTrip(name: string): Promise<{
+  id: string;
+  trip: PublicTrip;
+  pin: string;
+  photos_token: string;
+}> {
+  const created = await createRemoteTrip(name);
+  const trip = createExampleTrip(name);
+  const saved = await saveTrip(created.id, trip);
+  return {
+    id: created.id,
+    trip: saved,
+    pin: created.pin,
+    photos_token: created.photos_token,
+  };
 }
 
 export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip> {

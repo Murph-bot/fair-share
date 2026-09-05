@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { createRemoteTrip } from "../api/tripApi";
+import { createRemoteDemoTrip, createRemoteTrip } from "../api/tripApi";
 import { savePhotoPin, savePhotoToken } from "../api/photoSession";
+import { loadRecentTrips, type RecentTrip } from "../api/recentTrips";
 import { DonateButton } from "../components/donate-button";
 import { Colors, type ColorTheme } from "../constants/theme";
 import { useTranslation } from "../i18n";
@@ -16,11 +17,30 @@ function makeStyles(colors: ColorTheme) {
       flex: 1,
       backgroundColor: colors.background,
     },
-    container: {
-      flex: 1,
+    scrollContent: {
       padding: 24,
-      justifyContent: "center",
       gap: 20,
+      flexGrow: 1,
+    },
+    recentList: {
+      gap: 8,
+    },
+    recentItem: {
+      padding: 14,
+      borderRadius: 12,
+      backgroundColor: colors.backgroundElement,
+      borderWidth: 1,
+      borderColor: colors.rule,
+    },
+    recentName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.text,
+    },
+    recentMeta: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
     },
     kicker: {
       fontSize: 12,
@@ -105,6 +125,19 @@ export default function HomeScreen() {
   const [tripInput, setTripInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recents, setRecents] = useState<RecentTrip[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadRecentTrips().then((trips) => {
+      if (!cancelled) {
+        setRecents(trips);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleCreateTrip = async () => {
     const name = tripName.trim();
@@ -137,9 +170,27 @@ export default function HomeScreen() {
     router.push({ pathname: "/t/[id]", params: { id: parsed.id } });
   };
 
+  const handleOpenRecent = (id: string) => {
+    router.push({ pathname: "/t/[id]", params: { id } });
+  };
+
+  const handleCreateDemoTrip = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const created = await createRemoteDemoTrip(t("Demo trip"));
+      savePhotoPin(created.id, created.pin);
+      savePhotoToken(created.id, created.photos_token);
+      router.push({ pathname: "/t/[id]", params: { id: created.id } });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("Could not create trip"));
+      setBusy(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.kicker}>{t("Fair Share")}</Text>
         <Text style={styles.title}>{t("Split trip expenses fairly")}</Text>
         <Text style={styles.subtitle}>{t("Create a trip, add people, and share the link. No accounts, no ads.")}</Text>
@@ -196,10 +247,42 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.section}>
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+            onPress={() => void handleCreateDemoTrip()}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={t("Try a demo")}
+          >
+            <Text style={styles.secondaryButtonText}>{t("Try a demo")}</Text>
+          </Pressable>
+        </View>
+
+        {recents.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t("Recent trips")}</Text>
+            <View style={styles.recentList}>
+              {recents.map((trip) => (
+                <Pressable
+                  key={trip.id}
+                  style={styles.recentItem}
+                  onPress={() => handleOpenRecent(trip.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("Open {{name}}", { name: trip.name })}
+                >
+                  <Text style={styles.recentName}>{trip.name}</Text>
+                  <Text style={styles.recentMeta}>{trip.id}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <DonateButton />
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

@@ -5,8 +5,10 @@ import {
   addExpense,
   addPerson,
   createTrip,
+  movePerson,
   parseTrip,
   removeExpense,
+  renamePerson,
   tripFileJson,
   updateExpense,
   type Trip,
@@ -199,6 +201,44 @@ describe("trip operations", () => {
         participants: ["Alice"],
       }),
     ).toThrow();
+  });
+
+  it("renames a person and updates expenses", () => {
+    let trip = addPerson(addPerson(createTrip("T"), "Alice"), "Bob");
+    trip = addExpense(
+      trip,
+      {
+        description: "Dinner",
+        payer: "Alice",
+        amount_cents: 6000,
+        participants: ["Alice", "Bob"],
+      },
+      "id-1",
+    );
+    trip = renamePerson(trip, "Alice", "Alicia");
+    expect(trip.people).toEqual(["Alicia", "Bob"]);
+    expect(trip.expenses[0].payer).toBe("Alicia");
+    expect(trip.expenses[0].participants).toEqual(["Alicia", "Bob"]);
+    expect(trip.expenses[0].weights).toBeUndefined();
+  });
+
+  it("rejects renaming to an existing person", () => {
+    let trip = addPerson(addPerson(createTrip("T"), "Alice"), "Bob");
+    expect(() => renamePerson(trip, "Alice", "Bob")).toThrow(ValidationError);
+  });
+
+  it("reorders people", () => {
+    let trip = addPerson(addPerson(addPerson(createTrip("T"), "Alice"), "Bob"), "Charlie");
+    trip = movePerson(trip, "Charlie", "up");
+    expect(trip.people).toEqual(["Alice", "Charlie", "Bob"]);
+    trip = movePerson(trip, "Alice", "down");
+    expect(trip.people).toEqual(["Charlie", "Alice", "Bob"]);
+  });
+
+  it("ignores moving the first person up or the last person down", () => {
+    let trip = addPerson(addPerson(createTrip("T"), "Alice"), "Bob");
+    expect(movePerson(trip, "Alice", "up").people).toEqual(["Alice", "Bob"]);
+    expect(movePerson(trip, "Bob", "down").people).toEqual(["Alice", "Bob"]);
   });
 
   it("round-trips JSON through parseTrip", () => {

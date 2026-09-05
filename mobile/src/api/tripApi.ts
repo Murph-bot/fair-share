@@ -1,4 +1,4 @@
-import { parseTrip, type Trip } from "../domain";
+import { createExampleTrip, parseTrip, type Trip } from "../domain";
 import type { PublicTrip } from "../domain/photos";
 
 import { apiUrl, readError } from "./client";
@@ -92,4 +92,21 @@ export async function saveTrip(tripId: string, trip: Trip): Promise<PublicTrip> 
   }
 
   return asPublicTrip(await response.json());
+}
+
+export async function createRemoteDemoTrip(name: string): Promise<{
+  id: string;
+  trip: PublicTrip;
+  pin: string;
+  photos_token: string;
+}> {
+  const created = await createRemoteTrip(name);
+  const trip = createExampleTrip(name);
+  const saved = await saveTrip(created.id, trip);
+  return {
+    id: created.id,
+    trip: saved,
+    pin: created.pin,
+    photos_token: created.photos_token,
+  };
 }

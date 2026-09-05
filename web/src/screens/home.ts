@@ -1,4 +1,4 @@
-import { createRemoteTrip, saveTrip } from "../api";
+import { createRemoteDemoTrip, createRemoteTrip, saveTrip } from "../api";
 import { parseTrip, t, TRIP_ID_RE } from "@fairshare/domain";
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
@@ -64,6 +64,13 @@ export function renderHome(root: HTMLElement): void {
       </form>
 
       <section class="block">
+        <h2>${t("Try a demo")}</h2>
+        <p class="muted">${t("Play with an example trip before creating your own.")}</p>
+        <button type="button" id="demo-trip-btn" class="secondary">${t("Try a demo")}</button>
+        <p id="demo-error" class="err" hidden></p>
+      </section>
+
+      <section class="block">
         <h2>${t("Open an existing trip")}</h2>
         <form id="open-form" class="row">
           <label class="sr" for="trip-link">${t("Trip link or ID")}</label>
@@ -90,6 +97,8 @@ export function renderHome(root: HTMLElement): void {
 
   const form = root.querySelector("#create-form") as HTMLFormElement;
   const errorEl = root.querySelector("#create-error") as HTMLElement;
+  const demoBtn = root.querySelector("#demo-trip-btn") as HTMLButtonElement;
+  const demoError = root.querySelector("#demo-error") as HTMLElement;
   const openForm = root.querySelector("#open-form") as HTMLFormElement;
   const openInput = openForm.elements.namedItem("link") as HTMLInputElement;
   const openError = root.querySelector("#open-error") as HTMLElement;
@@ -98,7 +107,7 @@ export function renderHome(root: HTMLElement): void {
   const importError = root.querySelector("#import-error") as HTMLElement;
   const createBtn = form.querySelector("button") as HTMLButtonElement;
 
-  const busyButtons = [createBtn, openForm.querySelector("button") as HTMLButtonElement, importBtn];
+  const busyButtons = [createBtn, demoBtn, openForm.querySelector("button") as HTMLButtonElement, importBtn];
 
   const setBusy = (busy: boolean): void => {
     busyButtons.forEach((button) => {
@@ -121,6 +130,23 @@ export function renderHome(root: HTMLElement): void {
     } catch (err) {
       errorEl.hidden = false;
       errorEl.textContent = err instanceof Error ? err.message : t("Could not create trip");
+      setBusy(false);
+    }
+  });
+
+  demoBtn?.addEventListener("click", async () => {
+    demoError.hidden = true;
+    setBusy(true);
+    try {
+      const { id, pin, photos_token } = await createRemoteDemoTrip(t("Demo trip"));
+      savePhotoPin(id, pin);
+      savePhotoToken(id, photos_token);
+      announce(t("Trip created. PIN: {{pin}}", { pin }));
+      history.pushState({}, "", `/t/${id}`);
+      window.dispatchEvent(new Event("fairshare:route"));
+    } catch (err) {
+      demoError.hidden = false;
+      demoError.textContent = err instanceof Error ? err.message : t("Could not create trip");
       setBusy(false);
     }
   });

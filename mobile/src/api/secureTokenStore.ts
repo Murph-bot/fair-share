@@ -1,4 +1,4 @@
-import { memoryTokenStore, type TokenStore } from "./photoSession";
+import { type TokenStore } from "./storage";
 
 export async function createSecureTokenStore(): Promise<TokenStore> {
   try {
@@ -9,6 +9,7 @@ export async function createSecureTokenStore(): Promise<TokenStore> {
       removeItem: (key) => SecureStore.deleteItemAsync(key),
     };
   } catch {
+    const { memoryTokenStore } = await import("./storage");
     return memoryTokenStore();
   }
 }
