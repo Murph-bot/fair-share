@@ -2,6 +2,7 @@ export type Payment = {
   readonly frm: string;
   readonly to: string;
   readonly amount_cents: number;
+  completedAt?: string;
 };
 
 export function settle(balances: Record<string, number>): Payment[] {

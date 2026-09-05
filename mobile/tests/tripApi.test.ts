@@ -113,6 +113,7 @@ describe("tripApi", () => {
           participants: ["Alice", "Bob"],
         },
       ],
+      completedPayments: [],
     });
   });
 

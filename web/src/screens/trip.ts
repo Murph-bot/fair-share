@@ -5,8 +5,11 @@ import {
   addExpense,
   addPerson,
   centsToEuro,
+  isPaymentCompleted,
   movePerson,
+  recordPayment,
   renamePerson,
+  unrecordPayment,
   computeBalances,
   parseAmount,
   removeExpense,
@@ -123,11 +126,17 @@ function settleBlock(trip: Trip): string {
     return `<p class="muted">${t("All settled — no payments needed.")}</p>`;
   }
   return `<ul class="payments">${payments
-    .map(
-      (p) =>
-        `<li>${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${centsToEuro(p.amount_cents)}</strong>` +
-        `<button type="button" class="text-btn" data-share-from="${escapeHtml(p.frm)}" data-share-to="${escapeHtml(p.to)}" data-share-amount="${p.amount_cents}" aria-label="${t("Copy payment: {{from}} pays {{to}} {{amount}}", { from: escapeHtml(p.frm), to: escapeHtml(p.to), amount: centsToEuro(p.amount_cents) })}">${t("Share")}</button></li>`,
-    )
+    .map((p) => {
+      const completed = isPaymentCompleted(trip, p);
+      const recordAction = completed
+        ? `<button type="button" class="text-btn" data-unrecord-payment data-from="${escapeHtml(p.frm)}" data-to="${escapeHtml(p.to)}" data-amount="${p.amount_cents}">${t("Unmark")}</button>`
+        : `<button type="button" class="text-btn" data-record-payment data-from="${escapeHtml(p.frm)}" data-to="${escapeHtml(p.to)}" data-amount="${p.amount_cents}">${t("Mark as paid")}</button>`;
+      return (
+        `<li class="${completed ? "completed" : ""}">${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${centsToEuro(p.amount_cents)}</strong>` +
+        `<button type="button" class="text-btn" data-share-from="${escapeHtml(p.frm)}" data-share-to="${escapeHtml(p.to)}" data-share-amount="${p.amount_cents}" aria-label="${t("Copy payment: {{from}} pays {{to}} {{amount}}", { from: escapeHtml(p.frm), to: escapeHtml(p.to), amount: centsToEuro(p.amount_cents) })}">${t("Share")}</button>` +
+        `${recordAction}</li>`
+      );
+    })
     .join("")}</ul>`;
 }
 
@@ -353,6 +362,44 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     });
   });
 
+  root.querySelectorAll<HTMLButtonElement>("[data-record-payment]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const from = button.dataset.from ?? "";
+      const to = button.dataset.to ?? "";
+      const amountCents = Number(button.dataset.amount ?? "0");
+      try {
+        setBusy(root, true);
+        const next = recordPayment(trip, { frm: from, to, amount_cents: amountCents });
+        const saved = await persist(id, next, banner);
+        paint(root, id, saved, editingId);
+      } catch (err) {
+        if (!saveLock) {
+          setBusy(root, false);
+        }
+        setBanner(personError, err instanceof Error ? err.message : t("Could not mark payment"));
+      }
+    });
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-unrecord-payment]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const from = button.dataset.from ?? "";
+      const to = button.dataset.to ?? "";
+      const amountCents = Number(button.dataset.amount ?? "0");
+      try {
+        setBusy(root, true);
+        const next = unrecordPayment(trip, { frm: from, to, amount_cents: amountCents });
+        const saved = await persist(id, next, banner);
+        paint(root, id, saved, editingId);
+      } catch (err) {
+        if (!saveLock) {
+          setBusy(root, false);
+        }
+        setBanner(personError, err instanceof Error ? err.message : t("Could not unmark payment"));
+      }
+    });
+  });
+
   root.querySelector("#download-json")?.addEventListener("click", () => {
     const blob = new Blob([tripFileJson(trip)], { type: "application/json" });
     const href = URL.createObjectURL(blob);
@@ -524,7 +571,12 @@ export async function renderTrip(root: HTMLElement, id: string): Promise<void> {
       <main class="page">
         <p class="err">${escapeHtml(message)}</p>
         <p><a href="/">${t("Back to home")}</a></p>
+        <button type="button" id="reload-trip" class="secondary">${t("Try again")}</button>
       </main>
     `;
+    root.querySelector("#reload-trip")?.addEventListener("click", () => {
+      void renderTrip(root, id);
+    });
+    return;
   }
 }

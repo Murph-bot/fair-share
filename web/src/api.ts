@@ -84,6 +84,7 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
       name: trip.name,
       people: trip.people,
       expenses: trip.expenses,
+      completedPayments: trip.completedPayments,
     }),
   });
   if (!res.ok) {

@@ -1,11 +1,14 @@
 {
+  "id": "fairshare-trips",
   "name": "Fair Share",
   "short_name": "Fair Share",
   "description": "Split trip expenses fairly. No accounts, no ads.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f4f0e6",
   "theme_color": "#f4f0e6",
+  "categories": ["finance", "travel"],
   "icons": [
     {
       "src": "/icon.svg",

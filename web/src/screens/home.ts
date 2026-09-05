@@ -1,4 +1,5 @@
 import { createRemoteDemoTrip, createRemoteTrip, saveTrip } from "../api";
+import { getInstallPrompt, isStandalone, runInstallPrompt } from "../install";
 import { parseTrip, t, TRIP_ID_RE } from "@fairshare/domain";
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
@@ -41,6 +42,15 @@ export function renderHome(root: HTMLElement): void {
               `<li><a href="/t/${encodeURIComponent(item.id)}">${escapeHtml(item.name)}</a></li>`,
           )
           .join("")}</ul>`;
+
+  const showInstall = getInstallPrompt() !== null && !isStandalone();
+  const installBlock = showInstall
+    ? `<section class="block">
+        <h2>${t("Install app")}</h2>
+        <p class="muted">${t("Add Fair Share to your home screen for quick access.")}</p>
+        <button type="button" id="install-btn" class="secondary">${t("Install")}</button>
+      </section>`
+    : "";
 
   const themeLabel = getTheme() === "dark" ? "Light" : "Dark";
 
@@ -92,6 +102,8 @@ export function renderHome(root: HTMLElement): void {
         <h2>${t("On this device")}</h2>
         ${recentList}
       </section>
+
+      ${installBlock}
     </main>
   `;
 
@@ -107,7 +119,10 @@ export function renderHome(root: HTMLElement): void {
   const importError = root.querySelector("#import-error") as HTMLElement;
   const createBtn = form.querySelector("button") as HTMLButtonElement;
 
-  const busyButtons = [createBtn, demoBtn, openForm.querySelector("button") as HTMLButtonElement, importBtn];
+  const installBtn = root.querySelector("#install-btn") as HTMLButtonElement | null;
+  const busyButtons = [createBtn, demoBtn, openForm.querySelector("button") as HTMLButtonElement, importBtn, installBtn].filter(
+    (button): button is HTMLButtonElement => button !== null,
+  );
 
   const setBusy = (busy: boolean): void => {
     busyButtons.forEach((button) => {
@@ -178,6 +193,20 @@ export function renderHome(root: HTMLElement): void {
   languageToggle?.addEventListener("click", () => {
     nextLanguage();
     window.location.reload();
+  });
+
+  installBtn?.addEventListener("click", async () => {
+    setBusy(true);
+    try {
+      const result = await runInstallPrompt();
+      if (result?.outcome === "accepted") {
+        installBtn.remove();
+      } else {
+        setBusy(false);
+      }
+    } catch {
+      setBusy(false);
+    }
   });
 
   importInput.addEventListener("change", async () => {

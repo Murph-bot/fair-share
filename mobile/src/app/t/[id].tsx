@@ -20,11 +20,14 @@ import {
   addPerson,
   centsToEuro,
   computeBalances,
+  isPaymentCompleted,
   movePerson,
   parseAmount,
+  recordPayment,
   removeExpense,
   renamePerson,
   settle,
+  unrecordPayment,
   t,
   tripFileJson,
   updateExpense,
@@ -321,6 +324,16 @@ export default function TripScreen() {
     }
     setPersonError(null);
     await mutate((current) => movePerson(current, person, direction));
+  };
+
+  const handleRecordPayment = async (payment: { frm: string; to: string; amount_cents: number }) => {
+    if (!trip) {
+      return;
+    }
+    const next = isPaymentCompleted(trip, payment)
+      ? unrecordPayment(trip, payment)
+      : recordPayment(trip, payment);
+    await mutate(() => next);
   };
 
   const handleRemoveExpense = (expenseId: string, description: string) => {
@@ -719,12 +732,25 @@ export default function TripScreen() {
         <Section styles={styles} title={t("Who pays whom")}>
           {payments.length === 0 ? <Text style={styles.mutedText}>{t("All settled — no payments needed.")}</Text> : null}
           <View style={styles.listGap}>
-            {payments.map((payment) => (
-              <View key={`${payment.frm}-${payment.to}-${payment.amount_cents}`} style={styles.balanceRow}>
-                <Text style={styles.cardBody}>{payment.frm} → {payment.to}</Text>
-                <Text style={styles.balanceValue}>{centsToEuro(payment.amount_cents)}</Text>
-              </View>
-            ))}
+            {payments.map((payment) => {
+              const completed = trip ? isPaymentCompleted(trip, payment) : false;
+              return (
+                <Pressable
+                  key={`${payment.frm}-${payment.to}-${payment.amount_cents}`}
+                  style={[styles.balanceRow, completed && styles.completedRow]}
+                  onPress={() => void handleRecordPayment(payment)}
+                  accessibilityRole="button"
+                  accessibilityLabel={completed ? t("Unmark payment") : t("Mark as paid")}
+                >
+                  <Text style={[styles.cardBody, completed && styles.completedText]}>
+                    {payment.frm} → {payment.to}
+                  </Text>
+                  <Text style={[styles.balanceValue, completed && styles.completedText]}>
+                    {centsToEuro(payment.amount_cents)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </Section>
 
@@ -959,6 +985,12 @@ function makeStyles(colors: ColorTheme) {
   },
   negative: {
     color: colors.negative,
+  },
+  completedRow: {
+    opacity: 0.55,
+  },
+  completedText: {
+    textDecorationLine: "line-through",
   },
   weightList: {
     gap: 8,

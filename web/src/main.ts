@@ -1,6 +1,7 @@
 import { TRIP_ID_RE } from "@fairshare/domain";
 import { initTheme } from "./theme";
 import { initLanguage } from "./i18n";
+import { captureInstallPrompt } from "./install";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
 
@@ -34,6 +35,9 @@ function route(): void {
 
 window.addEventListener("popstate", route);
 window.addEventListener("fairshare:route", route);
+window.addEventListener("beforeinstallprompt", (event) => {
+  captureInstallPrompt(event);
+});
 document.addEventListener("click", (event) => {
   if (event.defaultPrevented || event.button !== 0) {
     return;

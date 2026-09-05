@@ -59,7 +59,7 @@ export async function fetchTrip(tripId: string): Promise<PublicTrip> {
   return asPublicTrip(await response.json());
 }
 
-type TripPayload = Pick<Trip, "schema_version" | "name" | "people" | "expenses">;
+type TripPayload = Pick<Trip, "schema_version" | "name" | "people" | "expenses" | "completedPayments">;
 
 function tripPayload(trip: Trip): TripPayload {
   return {
@@ -74,6 +74,7 @@ function tripPayload(trip: Trip): TripPayload {
       participants: [...expense.participants],
       ...(expense.weights === undefined ? {} : { weights: [...expense.weights] }),
     })),
+    completedPayments: trip.completedPayments ? [...trip.completedPayments] : undefined,
   };
 }
 

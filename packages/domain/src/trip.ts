@@ -1,4 +1,5 @@
 import { ExpenseNotFoundError, UnknownPersonError, ValidationError } from "./errors";
+import type { Payment } from "./settlement";
 
 export const SCHEMA_VERSION = 1;
 export const TRIP_ID_RE = /^[a-f0-9]{32}$/;
@@ -17,6 +18,7 @@ export type Trip = {
   name: string;
   people: string[];
   expenses: Expense[];
+  completedPayments?: Payment[];
 };
 
 export function newTripId(): string {
@@ -92,6 +94,7 @@ export function createTrip(name: string): Trip {
     name: trimmed,
     people: [],
     expenses: [],
+    completedPayments: [],
   };
 }
 
@@ -298,12 +301,61 @@ export function parseTrip(data: unknown): Trip {
     });
   }
 
+  const completedPayments = Array.isArray(data.completedPayments)
+    ? data.completedPayments
+        .filter(
+          (item): item is Record<string, unknown> & { frm: string; to: string; amount_cents: number } =>
+            isRecord(item) &&
+            typeof item.frm === "string" &&
+            typeof item.to === "string" &&
+            typeof item.amount_cents === "number",
+        )
+        .map((item) => ({
+          frm: item.frm,
+          to: item.to,
+          amount_cents: item.amount_cents,
+          completedAt: typeof item.completedAt === "string" ? item.completedAt : undefined,
+        }))
+    : undefined;
+
   return {
     schema_version: SCHEMA_VERSION,
     name: data.name.trim(),
     people,
     expenses,
+    completedPayments,
   };
+}
+
+function paymentKey(payment: Payment): string {
+  return `${payment.frm}:${payment.to}:${payment.amount_cents}`;
+}
+
+export function recordPayment(trip: Trip, payment: Payment): Trip {
+  const existing = trip.completedPayments ?? [];
+  if (existing.some((p) => paymentKey(p) === paymentKey(payment))) {
+    return trip;
+  }
+  const completed: Payment = {
+    ...payment,
+    completedAt: new Date().toISOString(),
+  };
+  return { ...trip, completedPayments: [...existing, completed] };
+}
+
+export function unrecordPayment(trip: Trip, payment: Payment): Trip {
+  const existing = trip.completedPayments ?? [];
+  const key = paymentKey(payment);
+  const next = existing.filter((p) => paymentKey(p) !== key);
+  if (next.length === existing.length) {
+    return trip;
+  }
+  return { ...trip, completedPayments: next };
+}
+
+export function isPaymentCompleted(trip: Trip, payment: Payment): boolean {
+  const existing = trip.completedPayments ?? [];
+  return existing.some((p) => paymentKey(p) === paymentKey(payment));
 }
 
 export function createExampleTrip(name: string): Trip {
@@ -350,6 +402,7 @@ export function tripFileJson(trip: Trip): string {
     name: trip.name,
     people: trip.people,
     expenses: trip.expenses,
+    completedPayments: trip.completedPayments,
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }
