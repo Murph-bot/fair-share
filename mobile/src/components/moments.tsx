@@ -212,19 +212,33 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {busy ? <ActivityIndicator color="#7c4a20" /> : null}
+      {busy ? <ActivityIndicator color={Colors.light.tint} /> : null}
       {photos.length === 0 ? <Text style={styles.muted}>No photos yet. Add one above.</Text> : null}
       <View style={styles.grid}>
-        {photos.map((photo) => (
+        {photos.map((photo, index) => (
           <View key={photo.id} style={styles.tile}>
-            <Image source={{ uri: photo.thumbUrl }} style={styles.thumb} accessibilityLabel="Photo from trip" />
+            <Image
+              source={{ uri: photo.thumbUrl }}
+              style={styles.thumb}
+              accessibilityRole="image"
+              accessibilityLabel={`Photo ${index + 1} of ${photos.length} from ${trip.name}`}
+            />
             <View style={styles.tileActions}>
               {photo.originalUrl?.startsWith("https://") ? (
-                <Pressable onPress={() => void Linking.openURL(photo.originalUrl as string)} accessibilityRole="link">
+                <Pressable
+                  onPress={() => void Linking.openURL(photo.originalUrl as string)}
+                  accessibilityRole="link"
+                  accessibilityLabel="Open original photo"
+                >
                   <Text style={styles.link}>Original</Text>
                 </Pressable>
               ) : null}
-              <Pressable onPress={() => handleDelete(photo)} accessibilityRole="button" accessibilityLabel="Delete photo">
+              <Pressable
+                onPress={() => handleDelete(photo)}
+                accessibilityRole="button"
+                accessibilityLabel="Delete photo"
+                accessibilityHint="Removes this photo from the trip"
+              >
                 <Text style={styles.danger}>Delete</Text>
               </Pressable>
             </View>

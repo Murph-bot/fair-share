@@ -119,6 +119,7 @@ export function momentsSection(): string {
   return `
     <section class="block" id="moments">
       <h2>Moments</h2>
+      <p class="muted small">Add trip photos, share them through the trip link, and lock them with a 6-digit PIN so only people with the PIN can view them.</p>
       <div id="moments-body"></div>
     </section>
   `;

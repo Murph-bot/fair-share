@@ -561,6 +561,24 @@ class TestRemoveExpense:
         code = run("remove-expense", "   ", trip_file=trip_file, expect_success=False)
         assert code != 0
 
+    def test_remove_last(self, trip_file):
+        run("init", "T", trip_file=trip_file)
+        run("add-person", "Alice", "Bob", trip_file=trip_file)
+        run(
+            "add",
+            "Dinner",
+            "--payer",
+            "Alice",
+            "--amount",
+            "10",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+        )
+        run("remove-expense", "--last", trip_file=trip_file)
+        data = json.loads(trip_file.read_text())
+        assert data["expenses"] == []
+
     def test_ambiguous_prefix_fails(self, trip_file):
         from fairshare.models import Expense, Trip
         from fairshare.storage import save
@@ -601,6 +619,7 @@ class TestEditExpense:
         run(
             "edit-expense",
             expense_id,
+            "--description",
             "Lunch",
             "--payer",
             "Bob",
@@ -625,6 +644,7 @@ class TestEditExpense:
         run(
             "edit-expense",
             expense_id[:8],
+            "--description",
             "Brunch",
             "--payer",
             "Alice",
@@ -644,6 +664,7 @@ class TestEditExpense:
         run(
             "edit-expense",
             expense_id,
+            "--description",
             "Hotel",
             "--payer",
             "Alice",
@@ -665,6 +686,7 @@ class TestEditExpense:
         run(
             "edit-expense",
             expense_id,
+            "--description",
             "Hotel",
             "--payer",
             "Alice",
@@ -679,6 +701,7 @@ class TestEditExpense:
         run(
             "edit-expense",
             expense_id,
+            "--description",
             "Hotel",
             "--payer",
             "Alice",
@@ -691,11 +714,32 @@ class TestEditExpense:
         exp = json.loads(trip_file.read_text())["expenses"][0]
         assert "weights" not in exp
 
+    def test_edit_last(self, trip_file):
+        self.setup_trip(trip_file)
+        run(
+            "edit-expense",
+            "--last",
+            "--description",
+            "Lunch",
+            "--payer",
+            "Bob",
+            "--amount",
+            "20",
+            "--with",
+            "Alice,Bob",
+            trip_file=trip_file,
+        )
+        exp = json.loads(trip_file.read_text())["expenses"][0]
+        assert exp["description"] == "Lunch"
+        assert exp["payer"] == "Bob"
+        assert exp["amount_cents"] == 2000
+
     def test_edit_unknown_id_fails(self, trip_file):
         self.setup_trip(trip_file)
         code = run(
             "edit-expense",
             "nonexistent",
+            "--description",
             "X",
             "--payer",
             "Alice",
@@ -724,6 +768,7 @@ class TestEditExpense:
         code = run(
             "edit-expense",
             "aaaa",
+            "--description",
             "C",
             "--payer",
             "Alice",
@@ -744,6 +789,7 @@ class TestEditExpense:
         code = run(
             "edit-expense",
             "   ",
+            "--description",
             "X",
             "--payer",
             "Alice",
@@ -761,6 +807,7 @@ class TestEditExpense:
         code = run(
             "edit-expense",
             expense_id,
+            "--description",
             "X",
             "--payer",
             "Zara",
@@ -779,6 +826,7 @@ class TestEditExpense:
         run(
             "edit-expense",
             expense_id,
+            "--description",
             "Lunch",
             "--payer",
             "Alice",

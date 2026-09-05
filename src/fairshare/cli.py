@@ -65,13 +65,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # add
     p_add = sub.add_parser("add", help="Record an expense")
-    p_add.add_argument("description", help="Expense description")
-    p_add.add_argument("--payer", required=True, help="Who paid")
-    p_add.add_argument("--amount", required=True, help="Amount (e.g. 60, 60.00, $60)")
+    p_add.add_argument("description", nargs="?", default=None, help="Expense description")
+    p_add.add_argument("--payer", default=None, help="Who paid")
+    p_add.add_argument("--amount", default=None, help="Amount (e.g. 60, 60.00, $60)")
     p_add.add_argument(
         "--with",
         dest="participants",
-        required=True,
+        default=None,
         help="Comma-separated list of participants",
     )
     p_add.add_argument(
@@ -91,18 +91,20 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # remove-expense
     p_rm = sub.add_parser("remove-expense", help="Remove an expense by ID")
-    p_rm.add_argument("id", help="Expense ID")
+    p_rm.add_argument("id", nargs="?", default=None, help="Expense ID or omit for interactive")
+    p_rm.add_argument("--last", action="store_true", help="Remove the most recent expense")
 
     # edit-expense
     p_edit = sub.add_parser("edit-expense", help="Edit an expense by ID")
-    p_edit.add_argument("id", help="Expense ID")
-    p_edit.add_argument("description", help="Expense description")
-    p_edit.add_argument("--payer", required=True, help="Who paid")
-    p_edit.add_argument("--amount", required=True, help="Amount (e.g. 60, 60.00, $60)")
+    p_edit.add_argument("id", nargs="?", default=None, help="Expense ID or omit for interactive")
+    p_edit.add_argument("--last", action="store_true", help="Edit the most recent expense")
+    p_edit.add_argument("--description", default=None, help="Expense description")
+    p_edit.add_argument("--payer", default=None, help="Who paid")
+    p_edit.add_argument("--amount", default=None, help="Amount (e.g. 60, 60.00, $60)")
     p_edit.add_argument(
         "--with",
         dest="participants",
-        required=True,
+        default=None,
         help="Comma-separated list of participants",
     )
     p_edit.add_argument(
@@ -207,6 +209,103 @@ def _find_expense(trip: Trip, expense_id: str) -> Expense:
     return matches[0]
 
 
+def _is_interactive() -> bool:
+    return sys.stdin.isatty()
+
+
+def _prompt(question: str, default: str | None = None) -> str:
+    prompt = question if default is None else f"{question} [{default}]: "
+    value = input(prompt).strip()
+    if not value and default is not None:
+        return default
+    return value
+
+
+def _choose_expense(trip: Trip, action: str) -> Expense:
+    if not trip.expenses:
+        raise ExpenseNotFoundError("No expenses to edit or remove.")
+    if not _is_interactive():
+        raise ValidationError(f"Specify an expense ID or use --last to {action}.")
+
+    print("Expenses:")
+    for index, expense in enumerate(trip.expenses, start=1):
+        amount = cents_to_str(expense.amount_cents)
+        print(f"  {index}. {expense.description} — {expense.payer} paid {amount} ({expense.id})")
+
+    while True:
+        raw = _prompt(f"Which expense do you want to {action}? (number or ID)")
+        if not raw:
+            continue
+        if raw.isdigit():
+            index = int(raw) - 1
+            if 0 <= index < len(trip.expenses):
+                return trip.expenses[index]
+            print("Invalid number.")
+            continue
+        try:
+            return _find_expense(trip, raw)
+        except FairShareError as err:
+            print(err)
+
+
+def _resolve_expense(trip: Trip, expense_id: str | None, last: bool, action: str) -> Expense:
+    if last:
+        if not trip.expenses:
+            raise ExpenseNotFoundError(f"No expenses to {action}.")
+        return trip.expenses[-1]
+    if expense_id:
+        return _find_expense(trip, expense_id)
+    return _choose_expense(trip, action)
+
+
+def _interactive_expense_args(
+    args: argparse.Namespace,
+    trip: Trip,
+    defaults: Expense | None = None,
+) -> argparse.Namespace:
+    defaults_participants = ",".join(defaults.participants) if defaults else ",".join(trip.people)
+    defaults_weights = None
+    if defaults and defaults.weights:
+        defaults_weights = ",".join(
+            f"{p}={w}" for p, w in zip(defaults.participants, defaults.weights)
+        )
+
+    if args.description is None:
+        if not _is_interactive():
+            raise ValidationError("Expense description is required (or use --interactive)")
+        args.description = _prompt("Description", defaults.description if defaults else None)
+    if not args.description:
+        raise ValidationError("Expense description cannot be empty")
+
+    if args.payer is None:
+        if not _is_interactive():
+            raise ValidationError("Payer is required (--payer)")
+        args.payer = _prompt("Who paid", defaults.payer if defaults else None)
+    if not args.payer:
+        raise ValidationError("Payer cannot be empty")
+
+    if args.amount is None:
+        if not _is_interactive():
+            raise ValidationError("Amount is required (--amount)")
+        args.amount = _prompt("Amount", None)
+    if not args.amount:
+        raise ValidationError("Amount cannot be empty")
+
+    if args.participants is None:
+        if not _is_interactive():
+            raise ValidationError("Participants are required (--with)")
+        args.participants = _prompt("Participants (comma-separated)", defaults_participants)
+    if not args.participants:
+        raise ValidationError("Participants cannot be empty")
+
+    if args.weights is None and _is_interactive():
+        args.weights = _prompt(
+            "Weights as name=weight, or leave blank for equal split", defaults_weights
+        )
+
+    return args
+
+
 def _expense_from_args(args: argparse.Namespace, trip: Trip, expense_id: str) -> Expense:
     description = args.description.strip()
     if not description:
@@ -279,6 +378,7 @@ def _expense_from_args(args: argparse.Namespace, trip: Trip, expense_id: str) ->
 
 def cmd_add(args: argparse.Namespace) -> int:
     trip = _require_file(args.file)
+    _interactive_expense_args(args, trip)
     expense = _expense_from_args(args, trip, str(uuid.uuid4()))
     new_trip = Trip(
         name=trip.name,
@@ -336,7 +436,7 @@ def cmd_settle(args: argparse.Namespace) -> int:
 
 def cmd_remove_expense(args: argparse.Namespace) -> int:
     trip = _require_file(args.file)
-    target = _find_expense(trip, args.id)
+    target = _resolve_expense(trip, args.id, args.last, "remove")
     remaining = tuple(e for e in trip.expenses if e.id != target.id)
     new_trip = Trip(
         name=trip.name,
@@ -351,7 +451,8 @@ def cmd_remove_expense(args: argparse.Namespace) -> int:
 
 def cmd_edit_expense(args: argparse.Namespace) -> int:
     trip = _require_file(args.file)
-    target = _find_expense(trip, args.id)
+    target = _resolve_expense(trip, args.id, args.last, "edit")
+    _interactive_expense_args(args, trip, target)
     expense = _expense_from_args(args, trip, target.id)
     updated = tuple(expense if e.id == target.id else e for e in trip.expenses)
     new_trip = Trip(

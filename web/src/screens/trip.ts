@@ -109,7 +109,8 @@ function settleBlock(trip: Trip): string {
   return `<ul class="payments">${payments
     .map(
       (p) =>
-        `<li>${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${centsToEuro(p.amount_cents)}</strong></li>`,
+        `<li>${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${centsToEuro(p.amount_cents)}</strong>` +
+        `<button type="button" class="text-btn" data-share-from="${escapeHtml(p.frm)}" data-share-to="${escapeHtml(p.to)}" data-share-amount="${p.amount_cents}" aria-label="Copy payment: ${escapeHtml(p.frm)} pays ${escapeHtml(p.to)} ${centsToEuro(p.amount_cents)}">Share</button></li>`,
     )
     .join("")}</ul>`;
 }
@@ -119,32 +120,53 @@ function centsToFormAmount(cents: number): string {
   return `${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
 }
 
+function chipInputId(prefix: string, person: string): string {
+  return `${prefix}-${encodeURIComponent(person)}`;
+}
+
 function expenseForm(trip: Trip, editing: Expense | null): string {
   if (trip.people.length === 0) {
     return "";
   }
-  const options = trip.people
+  const participantSet = new Set(editing?.participants ?? trip.people);
+
+  const defaultPayer = editing?.payer ?? trip.people[0];
+  const payerChips = trip.people
     .map((p) => {
-      const selected = editing !== null && p === editing.payer ? " selected" : "";
-      return `<option value="${escapeHtml(p)}"${selected}>${escapeHtml(p)}</option>`;
+      const checked = p === defaultPayer ? " checked" : "";
+      const id = chipInputId("payer", p);
+      return `
+        <input type="radio" name="payer" id="${id}" value="${escapeHtml(p)}" required class="chip-input"${checked}>
+        <label for="${id}" class="chip">${escapeHtml(p)}</label>`;
     })
     .join("");
-  const participantSet = new Set(editing?.participants ?? trip.people);
-  const checks = trip.people
+
+  const splitChips = trip.people
     .map((p) => {
       const checked = participantSet.has(p) ? " checked" : "";
+      const id = chipInputId("participant", p);
+      return `
+        <input type="checkbox" name="participant" id="${id}" value="${escapeHtml(p)}" class="chip-input"${checked}>
+        <label for="${id}" class="chip">${escapeHtml(p)}</label>`;
+    })
+    .join("");
+
+  const weightRows = trip.people
+    .map((p) => {
       const weightIndex = editing?.participants.indexOf(p) ?? -1;
       const weight =
         editing?.weights !== undefined && weightIndex >= 0
           ? String(editing.weights[weightIndex])
           : "1";
-      return `<label class="check">
-        <input type="checkbox" name="participant" value="${escapeHtml(p)}"${checked}>
-        <span>${escapeHtml(p)}</span>
-        <input type="number" name="weight-${escapeHtml(p)}" min="1" step="1" value="${escapeHtml(weight)}" class="weight" inputmode="numeric">
-      </label>`;
+      const id = chipInputId("weight", p);
+      return `
+        <div class="weight-row">
+          <label for="${id}">${escapeHtml(p)}</label>
+          <input type="number" id="${id}" name="weight-${escapeHtml(p)}" min="0" step="1" value="${escapeHtml(weight)}" class="weight" inputmode="numeric">
+        </div>`;
     })
     .join("");
+
   const desc = editing ? escapeHtml(editing.description) : "";
   const amount = editing ? escapeHtml(centsToFormAmount(editing.amount_cents)) : "";
   const unequal = editing?.weights !== undefined ? " checked" : "";
@@ -153,22 +175,40 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
   const cancel = editing
     ? `<button type="button" class="text-btn" id="cancel-edit">Cancel</button>`
     : "";
+
   return `
     <form id="expense-form" class="stack"${editingAttr}>
       <label for="exp-desc">Description</label>
       <input id="exp-desc" name="description" type="text" required maxlength="120" autocomplete="off" value="${desc}">
       <label for="exp-amount">Amount (€)</label>
       <input id="exp-amount" name="amount" type="text" inputmode="decimal" required placeholder="60 or 60.50" value="${amount}">
-      <label for="exp-payer">Who paid</label>
-      <select id="exp-payer" name="payer" required>${options}</select>
-      <fieldset>
-        <legend>Split between</legend>
-        ${checks}
+
+      <fieldset class="chip-fieldset">
+        <legend>Who paid</legend>
+        <div class="chip-row" role="radiogroup" aria-required="true">
+          ${payerChips}
+        </div>
       </fieldset>
-      <label class="check">
-        <input type="checkbox" id="unequal" name="unequal"${unequal}>
-        <span>Unequal shares (integer weights)</span>
-      </label>
+
+      <fieldset class="chip-fieldset">
+        <legend>Split between</legend>
+        <div class="chip-row">
+          ${splitChips}
+        </div>
+      </fieldset>
+
+      <div class="weight-toggle">
+        <label class="check">
+          <input type="checkbox" id="unequal" name="unequal"${unequal}>
+          <span>Split by shares</span>
+        </label>
+        <p class="muted small" id="weight-help">If selected, give each person an integer share. Use 1 for an equal share, 2 for twice as much, etc.</p>
+      </div>
+
+      <div class="weight-list" id="weight-list">
+        ${weightRows}
+      </div>
+
       <p id="expense-error" class="err" role="alert" aria-live="assertive" hidden></p>
       <button type="submit">${submitLabel}</button>
       ${cancel}
@@ -258,6 +298,21 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
 
   root.querySelector("#copy-link")?.addEventListener("click", () => {
     void copyWithFeedback("copy-link", "Link", window.location.href);
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-share-from]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const from = button.dataset.shareFrom ?? "";
+      const to = button.dataset.shareTo ?? "";
+      const amountCents = Number(button.dataset.shareAmount ?? "0");
+      const message = `${from} pays ${to} ${centsToEuro(amountCents)}`;
+      try {
+        await navigator.clipboard.writeText(message);
+        announce("Payment copied");
+      } catch {
+        window.prompt("Copy this payment", message);
+      }
+    });
   });
 
   root.querySelector("#download-json")?.addEventListener("click", () => {
