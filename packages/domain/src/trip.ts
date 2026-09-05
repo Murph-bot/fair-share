@@ -11,6 +11,9 @@ export type Expense = {
   amount_cents: number;
   participants: string[];
   weights?: number[];
+  date?: string;
+  category?: string;
+  note?: string;
 };
 
 export type Trip = {
@@ -19,6 +22,7 @@ export type Trip = {
   people: string[];
   expenses: Expense[];
   completedPayments?: Payment[];
+  archivedAt?: string;
 };
 
 export function newTripId(): string {
@@ -81,6 +85,14 @@ export function validateExpense(expense: Expense, people: string[]): void {
     if (expense.weights.some((w) => !Number.isInteger(w) || w <= 0)) {
       throw new ValidationError(`All weights must be positive, got ${expense.weights}`);
     }
+  }
+
+  if (expense.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(expense.date)) {
+    throw new ValidationError(`Invalid date format, expected YYYY-MM-DD: ${expense.date}`);
+  }
+
+  if (expense.category !== undefined && expense.category.includes(",")) {
+    throw new ValidationError("Category cannot contain commas");
   }
 }
 
@@ -155,6 +167,9 @@ export type NewExpenseInput = {
   amount_cents: number;
   participants: string[];
   weights?: number[];
+  date?: string;
+  category?: string;
+  note?: string;
 };
 
 function buildExpense(trip: Trip, input: NewExpenseInput, id: string): Expense {
@@ -178,6 +193,9 @@ function buildExpense(trip: Trip, input: NewExpenseInput, id: string): Expense {
     amount_cents: input.amount_cents,
     participants,
     weights: input.weights,
+    date: input.date,
+    category: input.category,
+    note: input.note,
   };
   validateExpense(expense, trip.people);
   return expense;
@@ -280,6 +298,13 @@ export function parseTrip(data: unknown): Trip {
       throw new ValidationError("participants must be a list of names");
     }
 
+    const dateRaw = item.date;
+    const date = dateRaw === undefined || dateRaw === null ? undefined : String(dateRaw);
+    const categoryRaw = item.category;
+    const category = categoryRaw === undefined || categoryRaw === null ? undefined : String(categoryRaw);
+    const noteRaw = item.note;
+    const note = noteRaw === undefined || noteRaw === null ? undefined : String(noteRaw);
+
     const expense: Expense = {
       id: item.id,
       description: item.description,
@@ -287,6 +312,9 @@ export function parseTrip(data: unknown): Trip {
       amount_cents: Number(item.amount_cents),
       participants: item.participants,
       weights,
+      date,
+      category,
+      note,
     };
     if (ids.has(expense.id)) {
       throw new ValidationError(`Duplicate expense id ${expense.id}`);
@@ -298,6 +326,9 @@ export function parseTrip(data: unknown): Trip {
       payer: findCanonical(people, expense.payer) ?? expense.payer,
       participants: expense.participants.map((p) => findCanonical(people, p) ?? p),
       description: expense.description.trim(),
+      date,
+      category: category ? category.trim() : undefined,
+      note: note ? note.trim() : undefined,
     });
   }
 
@@ -318,12 +349,16 @@ export function parseTrip(data: unknown): Trip {
         }))
     : undefined;
 
+  const archivedAt =
+    data.archivedAt === undefined || data.archivedAt === null ? undefined : String(data.archivedAt);
+
   return {
     schema_version: SCHEMA_VERSION,
     name: data.name.trim(),
     people,
     expenses,
     completedPayments,
+    archivedAt,
   };
 }
 
@@ -356,6 +391,18 @@ export function unrecordPayment(trip: Trip, payment: Payment): Trip {
 export function isPaymentCompleted(trip: Trip, payment: Payment): boolean {
   const existing = trip.completedPayments ?? [];
   return existing.some((p) => paymentKey(p) === paymentKey(payment));
+}
+
+export function archiveTrip(trip: Trip): Trip {
+  if (trip.archivedAt) {
+    return trip;
+  }
+  return { ...trip, archivedAt: new Date().toISOString() };
+}
+
+export function unarchiveTrip(trip: Trip): Trip {
+  const { archivedAt: _, ...rest } = trip;
+  return rest;
 }
 
 export function createExampleTrip(name: string): Trip {
@@ -403,6 +450,7 @@ export function tripFileJson(trip: Trip): string {
     people: trip.people,
     expenses: trip.expenses,
     completedPayments: trip.completedPayments,
+    archivedAt: trip.archivedAt,
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }

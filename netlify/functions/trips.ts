@@ -11,6 +11,7 @@ import { createTrip, newTripId, parseTrip, TRIP_ID_RE, type Trip } from "../../p
 import {
   assertPinAllowed,
   clearPinFailures,
+  corsHeaders,
   corsPreflight,
   errorResponse,
   json,
@@ -21,7 +22,7 @@ import {
   readJsonBody,
   recordPinFailure,
 } from "./_shared/http";
-import { tripsStore } from "./_shared/stores";
+import { photosStore, tripsStore } from "./_shared/stores";
 
 export default async (req: Request, context: Context) => {
   try {
@@ -89,6 +90,18 @@ export default async (req: Request, context: Context) => {
       const pin_hash = pinHashFromRecord(existing);
       await store.setJSON(id, pin_hash ? { ...trip, pin_hash } : trip);
       return json(200, publicTrip(trip, Boolean(pin_hash)));
+    }
+
+    if (req.method === "DELETE") {
+      const existing = await store.get(id, { type: "json" });
+      if (existing === null) {
+        return json(404, { error: "Trip not found" });
+      }
+      const photoStore = photosStore();
+      const { blobs } = await photoStore.list({ prefix: `${id}/` });
+      await Promise.all(blobs.map((blob) => photoStore.delete(blob.key)));
+      await store.delete(id);
+      return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
     return json(405, { error: "Method not allowed" });

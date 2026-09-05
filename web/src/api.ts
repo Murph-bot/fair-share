@@ -75,6 +75,15 @@ export async function createRemoteDemoTrip(name: string): Promise<{
   };
 }
 
+export async function deleteRemoteTrip(id: string): Promise<void> {
+  const res = await fetch(`/api/trips/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+}
+
 export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip> {
   const res = await fetch(`/api/trips/${id}`, {
     method: "PUT",
@@ -83,7 +92,18 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
       schema_version: trip.schema_version,
       name: trip.name,
       people: trip.people,
-      expenses: trip.expenses,
+      archivedAt: trip.archivedAt,
+      expenses: trip.expenses.map((expense) => ({
+        id: expense.id,
+        description: expense.description,
+        payer: expense.payer,
+        amount_cents: expense.amount_cents,
+        participants: expense.participants,
+        ...(expense.weights === undefined ? {} : { weights: expense.weights }),
+        ...(expense.date === undefined ? {} : { date: expense.date }),
+        ...(expense.category === undefined ? {} : { category: expense.category }),
+        ...(expense.note === undefined ? {} : { note: expense.note }),
+      })),
       completedPayments: trip.completedPayments,
     }),
   });

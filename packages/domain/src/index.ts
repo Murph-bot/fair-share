@@ -16,6 +16,8 @@ export {
   TRIP_ID_RE,
   newTripId,
   createTrip,
+  archiveTrip,
+  unarchiveTrip,
   createExampleTrip,
   addPerson,
   renamePerson,

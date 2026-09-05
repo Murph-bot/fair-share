@@ -15,6 +15,7 @@
       "bundleIdentifier": "app.fairshare.trips",
       "buildNumber": "1",
       "supportsTablet": true,
+      "associatedDomains": ["applinks:fair-share-trips.netlify.app"],
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Fair Share uses your photo library so you can add trip photos to Moments.",
         "ITSAppUsesNonExemptEncryption": false
@@ -23,6 +24,20 @@
     "android": {
       "package": "app.fairshare.trips",
       "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "fair-share-trips.netlify.app",
+              "pathPrefix": "/t"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#f4f0e6",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

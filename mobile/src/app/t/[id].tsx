@@ -12,12 +12,13 @@ import {
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   addExpense,
   addPerson,
+  archiveTrip,
   centsToEuro,
   computeBalances,
   isPaymentCompleted,
@@ -27,6 +28,7 @@ import {
   removeExpense,
   renamePerson,
   settle,
+  unarchiveTrip,
   unrecordPayment,
   t,
   tripFileJson,
@@ -36,6 +38,7 @@ import {
   type Trip,
 } from "../../domain";
 import { loadPhotoPin } from "../../api/photoSession";
+import { deleteRemoteTrip } from "../../api/tripApi";
 import { apiBaseUrl } from "../../api/client";
 import { Moments } from "../../components/moments";
 import { useTrip } from "../../hooks/useTrip";
@@ -53,6 +56,9 @@ type ExpenseDraft = {
   participants: Record<string, boolean>;
   weighted: boolean;
   weights: Record<string, string>;
+  date: string;
+  category: string;
+  note: string;
 };
 
 function makeExpenseDraft(trip: Trip, expense?: Expense): ExpenseDraft {
@@ -74,6 +80,9 @@ function makeExpenseDraft(trip: Trip, expense?: Expense): ExpenseDraft {
     participants,
     weighted: expense?.weights !== undefined,
     weights,
+    date: expense?.date ?? "",
+    category: expense?.category ?? "",
+    note: expense?.note ?? "",
   };
 }
 
@@ -133,6 +142,8 @@ function Field({
   onChangeText,
   placeholder,
   keyboardType,
+  multiline,
+  numberOfLines,
   styles,
 }: {
   label: string;
@@ -140,6 +151,8 @@ function Field({
   onChangeText: (value: string) => void;
   placeholder?: string;
   keyboardType?: "default" | "numeric" | "decimal-pad";
+  multiline?: boolean;
+  numberOfLines?: number;
   styles: Styles;
 }) {
   return (
@@ -150,6 +163,8 @@ function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         keyboardType={keyboardType}
+        multiline={multiline}
+        numberOfLines={numberOfLines}
         autoCapitalize="none"
         autoCorrect={false}
         style={styles.input}
@@ -173,6 +188,7 @@ function ErrorBanner({ message, styles }: { message: string | null; styles: Styl
 export default function TripScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string }>();
+  const router = useRouter();
   const tripId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
   const { trip, loading, saving, error, reload, mutate } = useTrip(tripId);
   const [personName, setPersonName] = useState("");
@@ -181,6 +197,7 @@ export default function TripScreen() {
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [expenseFilter, setExpenseFilter] = useState("");
   const [photoPin, setPhotoPin] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
 
@@ -278,6 +295,23 @@ export default function TripScreen() {
     return settle(balances);
   }, [balances]);
 
+  const filteredExpenses = useMemo(() => {
+    if (!trip) {
+      return [];
+    }
+    const query = expenseFilter.trim().toLowerCase();
+    if (!query) {
+      return trip.expenses;
+    }
+    return trip.expenses.filter((expense) => {
+      const text = [expense.description, expense.payer, expense.category, expense.note, expense.participants.join(" ")]
+        .filter((x): x is string => Boolean(x))
+        .join(" ")
+        .toLowerCase();
+      return text.includes(query);
+    });
+  }, [trip, expenseFilter]);
+
   const handleAddPerson = async () => {
     if (!trip) {
       return;
@@ -324,6 +358,35 @@ export default function TripScreen() {
     }
     setPersonError(null);
     await mutate((current) => movePerson(current, person, direction));
+  };
+
+  const handleArchiveTrip = async () => {
+    if (!trip) {
+      return;
+    }
+    const next = trip.archivedAt ? unarchiveTrip(trip) : archiveTrip(trip);
+    await mutate(() => next);
+  };
+
+  const handleDeleteTrip = () => {
+    if (!trip) {
+      return;
+    }
+    Alert.alert(t("Delete trip?"), t("This cannot be undone."), [
+      { text: t("Cancel"), style: "cancel" },
+      {
+        text: t("Delete"),
+        style: "destructive",
+        onPress: () => {
+          if (!tripId) {
+            return;
+          }
+          void deleteRemoteTrip(tripId).then(() => {
+            router.replace("/");
+          });
+        },
+      },
+    ]);
   };
 
   const handleRecordPayment = async (payment: { frm: string; to: string; amount_cents: number }) => {
@@ -425,6 +488,9 @@ export default function TripScreen() {
               }),
             }
           : {}),
+        ...(expenseDraft.date ? { date: expenseDraft.date } : {}),
+        ...(expenseDraft.category ? { category: expenseDraft.category } : {}),
+        ...(expenseDraft.note ? { note: expenseDraft.note } : {}),
       };
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : t("Invalid weights"));
@@ -530,6 +596,15 @@ export default function TripScreen() {
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={() => void handleExportJson()} accessibilityRole="button" accessibilityLabel={t("Export trip JSON")}>
             <Text style={styles.secondaryButtonText}>{t("Export JSON")}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.actionRow}>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleArchiveTrip()} accessibilityRole="button" accessibilityLabel={trip.archivedAt ? t("Unarchive") : t("Archive")}>
+            <Text style={styles.secondaryButtonText}>{trip.archivedAt ? t("Unarchive") : t("Archive")}</Text>
+          </Pressable>
+          <Pressable style={[styles.secondaryButton, styles.dangerButton]} onPress={handleDeleteTrip} accessibilityRole="button" accessibilityLabel={t("Delete")}>
+            <Text style={styles.dangerButtonText}>{t("Delete")}</Text>
           </Pressable>
         </View>
 
@@ -678,6 +753,32 @@ export default function TripScreen() {
             </View>
           ) : null}
 
+          <Field
+            styles={styles}
+            label={t("Date")}
+            value={draft.date}
+            onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, date: value } : current))}
+            placeholder="YYYY-MM-DD"
+          />
+
+          <Field
+            styles={styles}
+            label={t("Category")}
+            value={draft.category}
+            onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, category: value } : current))}
+            placeholder={t("e.g. Food")}
+          />
+
+          <Field
+            styles={styles}
+            label={t("Note")}
+            value={draft.note}
+            onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, note: value } : current))}
+            placeholder={t("Optional note")}
+            multiline
+            numberOfLines={2}
+          />
+
           <View style={styles.rowGap}>
             <StepButton styles={styles} label={saving ? t("Saving…") : editingExpenseId ? t("Save changes") : t("Add expense")} onPress={() => void handleSaveExpense()} />
             {editingExpenseId ? (
@@ -690,11 +791,29 @@ export default function TripScreen() {
 
         <Section styles={styles} title={t("Expenses")}>
           {trip.expenses.length === 0 ? <Text style={styles.mutedText}>{t("No expenses yet. Add one above.")}</Text> : null}
+          {trip.expenses.length > 0 ? (
+            <Field
+              styles={styles}
+              label={t("Search expenses")}
+              value={expenseFilter}
+              onChangeText={(value) => setExpenseFilter(value)}
+              placeholder={t("Search expenses")}
+            />
+          ) : null}
           <View style={styles.listGap}>
-            {trip.expenses.map((expense) => (
+            {filteredExpenses.map((expense) => (
               <View key={expense.id} style={styles.card}>
                 <Text style={styles.cardTitle}>{expense.description}</Text>
-                <Text style={styles.mutedText}>{expense.payer} {t("paid")} {centsToEuro(expense.amount_cents)}</Text>
+                <Text style={styles.mutedText}>
+                  {[
+                    `${expense.payer} ${t("paid")} ${centsToEuro(expense.amount_cents)}`,
+                    expense.date,
+                    expense.category,
+                    expense.note,
+                  ]
+                    .filter((x): x is string => Boolean(x))
+                    .join(" · ")}
+                </Text>
                 <Text style={styles.cardBody}>{formatParticipants(expense)}</Text>
                 <View style={styles.rowGap}>
                   <StepButton styles={styles} label={t("Edit")} onPress={() => handleEditExpense(expense)} />

@@ -17,6 +17,8 @@ export {
   isPaymentCompleted,
   parseTrip,
   createTrip,
+  archiveTrip,
+  unarchiveTrip,
   createExampleTrip,
   tripFileJson,
   type Trip,

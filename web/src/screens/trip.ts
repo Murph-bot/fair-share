@@ -1,21 +1,23 @@
 import { showQrDialog } from "../qr";
-import { fetchTrip, saveTrip, type PublicTrip } from "../api";
+import { deleteRemoteTrip, fetchTrip, saveTrip, type PublicTrip } from "../api";
 import { getTheme, languageButtonHtml, nextLanguage, themeButtonHtml, toggleTheme } from "../theme";
 import {
   addExpense,
   addPerson,
+  archiveTrip,
   centsToEuro,
+  computeBalances,
   isPaymentCompleted,
   movePerson,
-  recordPayment,
-  renamePerson,
-  unrecordPayment,
-  computeBalances,
   parseAmount,
+  recordPayment,
   removeExpense,
+  renamePerson,
   settle,
   t,
   tripFileJson,
+  unarchiveTrip,
+  unrecordPayment,
   updateExpense,
   type Expense,
   type Trip,
@@ -77,20 +79,34 @@ function peopleList(trip: Trip): string {
     .join("")}</ul>`;
 }
 
+function expenseSearchableText(e: Expense): string {
+  return [e.description, e.payer, e.category, e.note, e.participants.join(" ")]
+    .filter((x): x is string => Boolean(x))
+    .join(" ")
+    .toLowerCase();
+}
+
 function expenseCards(trip: Trip): string {
   if (trip.expenses.length === 0) {
     return `<p class="muted">${t("No expenses yet. Add one above.")}</p>`;
   }
-  return `<ul class="expenses">${trip.expenses
+  const filterInput = `<label class="sr" for="expense-filter">${t("Search expenses")}</label>
+    <input id="expense-filter" class="expense-filter" type="search" placeholder="${t("Search expenses")}" autocomplete="off">`;
+  return `${filterInput}<ul class="expenses">${trip.expenses
     .map((e) => {
       const weights =
         e.weights !== undefined
           ? ` · ${t("weights")} ${escapeHtml(e.weights.join(":"))}`
           : "";
-          return `<li>
+          const meta = [
+            `${escapeHtml(e.payer)} ${t("paid")} ${centsToEuro(e.amount_cents)}`,
+            ...[e.date, e.category, e.note].filter((x): x is string => Boolean(x)).map((x) => escapeHtml(x)),
+            `${escapeHtml(e.participants.join(", "))}${weights}`,
+          ];
+          return `<li data-search="${escapeHtml(expenseSearchableText(e))}">
         <div>
           <strong>${escapeHtml(e.description)}</strong>
-          <span class="meta">${escapeHtml(e.payer)} ${t("paid")} ${centsToEuro(e.amount_cents)} · ${escapeHtml(e.participants.join(", "))}${weights}</span>
+          <span class="meta">${meta.join(" · ")}</span>
         </div>
         <div class="expense-actions">
           <button type="button" class="text-btn" data-edit="${escapeHtml(e.id)}" aria-label="${t("Edit {{description}}", { description: escapeHtml(e.description) })}">${t("Edit")}</button>
@@ -194,6 +210,9 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
 
   const desc = editing ? escapeHtml(editing.description) : "";
   const amount = editing ? escapeHtml(centsToFormAmount(editing.amount_cents)) : "";
+  const date = editing?.date ? escapeHtml(editing.date) : "";
+  const note = editing?.note ? escapeHtml(editing.note) : "";
+  const category = editing?.category ? escapeHtml(editing.category) : "";
   const unequal = editing?.weights !== undefined ? " checked" : "";
   const submitLabel = editing ? t("Save expense") : t("Add expense");
   const editingAttr = editing ? ` data-editing="${escapeHtml(editing.id)}"` : "";
@@ -201,12 +220,34 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
     ? `<button type="button" class="text-btn" id="cancel-edit">${t("Cancel")}</button>`
     : "";
 
+  const categoryOptions = ["Food", "Transport", "Accommodation", "Entertainment", "Shopping", "Other"]
+    .map((c) => `<option value="${escapeHtml(c)}"${category === c ? " selected" : ""}>${t(c)}</option>`)
+    .join("");
+
   return `
     <form id="expense-form" class="stack"${editingAttr}>
       <label for="exp-desc">${t("Description")}</label>
       <input id="exp-desc" name="description" type="text" required maxlength="120" autocomplete="off" value="${desc}">
+
       <label for="exp-amount">${t("Amount (€)")}</label>
       <input id="exp-amount" name="amount" type="text" inputmode="decimal" required placeholder="${t("60 or 60.50")}" value="${amount}">
+
+      <div class="row">
+        <div>
+          <label for="exp-date">${t("Date")}</label>
+          <input id="exp-date" name="date" type="date" value="${date}">
+        </div>
+        <div>
+          <label for="exp-category">${t("Category")}</label>
+          <select id="exp-category" name="category">
+            <option value="">${t("Select category")}</option>
+            ${categoryOptions}
+          </select>
+        </div>
+      </div>
+
+      <label for="exp-note">${t("Note")}</label>
+      <textarea id="exp-note" name="note" rows="2" maxlength="200" placeholder="${t("Optional note")}">${note}</textarea>
 
       <fieldset class="chip-fieldset">
         <legend>${t("Who paid")}</legend>
@@ -256,6 +297,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         <button type="button" id="copy-link" title="${t("Copy the trip link to share")}">${t("Copy link")}</button>
         <button type="button" id="show-qr" title="${t("Show a QR code for the trip link")}">${t("Show QR")}</button>
         <button type="button" id="download-json" title="${t("Download the trip as a JSON file")}">${t("Download JSON")}</button>
+        <button type="button" id="archive-trip" title="${trip.archivedAt ? t("Unarchive this trip") : t("Archive this trip")}">${trip.archivedAt ? t("Unarchive") : t("Archive")}</button>
+        <button type="button" id="delete-trip" title="${t("Delete this trip forever")}">${t("Delete")}</button>
         ${languageButtonHtml()}
         ${themeButtonHtml(themeLabel)}
       </div>
@@ -410,6 +453,37 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     URL.revokeObjectURL(href);
   });
 
+  root.querySelector("#archive-trip")?.addEventListener("click", async () => {
+    try {
+      setBusy(root, true);
+      const next = trip.archivedAt ? unarchiveTrip(trip) : archiveTrip(trip);
+      const saved = await persist(id, next, banner);
+      paint(root, id, saved, editingId);
+    } catch (err) {
+      if (!saveLock) {
+        setBusy(root, false);
+      }
+      setBanner(banner, err instanceof Error ? err.message : t("Could not archive trip"));
+    }
+  });
+
+  root.querySelector("#delete-trip")?.addEventListener("click", async () => {
+    if (!window.confirm(t("Delete this trip forever? This cannot be undone."))) {
+      return;
+    }
+    try {
+      setBusy(root, true);
+      await deleteRemoteTrip(id);
+      history.pushState({}, "", "/");
+      window.dispatchEvent(new Event("fairshare:route"));
+    } catch (err) {
+      if (!saveLock) {
+        setBusy(root, false);
+      }
+      setBanner(banner, err instanceof Error ? err.message : t("Could not delete trip"));
+    }
+  });
+
   const personForm = root.querySelector("#person-form") as HTMLFormElement;
   const personError = root.querySelector("#person-error") as HTMLElement;
   personForm.addEventListener("submit", async (event) => {
@@ -492,12 +566,18 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         });
       }
       const amountCents = parseAmount(String(data.get("amount") ?? ""));
+      const rawDate = String(data.get("date") ?? "").trim();
+      const rawCategory = String(data.get("category") ?? "").trim();
+      const rawNote = String(data.get("note") ?? "").trim();
       const input = {
         description: String(data.get("description") ?? ""),
         payer: String(data.get("payer") ?? ""),
         amount_cents: amountCents,
         participants,
         weights,
+        date: rawDate ? rawDate : undefined,
+        category: rawCategory ? rawCategory : undefined,
+        note: rawNote ? rawNote : undefined,
       };
       const editingExpenseId = expenseFormEl.dataset.editing;
       const next = editingExpenseId
@@ -528,6 +608,15 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
 
   root.querySelector("#cancel-edit")?.addEventListener("click", () => {
     paint(root, id, trip);
+  });
+
+  const filterInput = root.querySelector("#expense-filter") as HTMLInputElement | null;
+  filterInput?.addEventListener("input", () => {
+    const query = filterInput.value.trim().toLowerCase();
+    root.querySelectorAll<HTMLLIElement>(".expenses li").forEach((item) => {
+      const text = item.getAttribute("data-search") ?? "";
+      item.style.display = !query || text.includes(query) ? "" : "none";
+    });
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((button) => {

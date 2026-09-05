@@ -59,13 +59,14 @@ export async function fetchTrip(tripId: string): Promise<PublicTrip> {
   return asPublicTrip(await response.json());
 }
 
-type TripPayload = Pick<Trip, "schema_version" | "name" | "people" | "expenses" | "completedPayments">;
+type TripPayload = Pick<Trip, "schema_version" | "name" | "people" | "expenses" | "completedPayments" | "archivedAt">;
 
 function tripPayload(trip: Trip): TripPayload {
   return {
     schema_version: trip.schema_version,
     name: trip.name,
     people: [...trip.people],
+    archivedAt: trip.archivedAt,
     expenses: trip.expenses.map((expense) => ({
       id: expense.id,
       description: expense.description,
@@ -73,9 +74,25 @@ function tripPayload(trip: Trip): TripPayload {
       amount_cents: expense.amount_cents,
       participants: [...expense.participants],
       ...(expense.weights === undefined ? {} : { weights: [...expense.weights] }),
+      ...(expense.date === undefined ? {} : { date: expense.date }),
+      ...(expense.category === undefined ? {} : { category: expense.category }),
+      ...(expense.note === undefined ? {} : { note: expense.note }),
     })),
     completedPayments: trip.completedPayments ? [...trip.completedPayments] : undefined,
   };
+}
+
+export async function deleteRemoteTrip(tripId: string): Promise<void> {
+  const response = await fetch(apiUrl(`/api/trips/${tripId}`), {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await readError(response));
+  }
 }
 
 export async function saveTrip(tripId: string, trip: Trip): Promise<PublicTrip> {
