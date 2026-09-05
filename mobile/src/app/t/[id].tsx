@@ -190,7 +190,7 @@ export default function TripScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const tripId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
-  const { trip, loading, saving, error, reload, mutate } = useTrip(tripId);
+  const { trip, loading, saving, error, queued, reload, mutate, flush } = useTrip(tripId);
   const [personName, setPersonName] = useState("");
   const [personError, setPersonError] = useState<string | null>(null);
   const [editingPerson, setEditingPerson] = useState<{ old: string; draft: string } | null>(null);
@@ -607,6 +607,13 @@ export default function TripScreen() {
             <Text style={styles.dangerButtonText}>{t("Delete")}</Text>
           </Pressable>
         </View>
+
+        {queued ? (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText}>{t("You are offline. Changes are saved locally and will sync when you are back online.")}</Text>
+            <StepButton styles={styles} label={t("Sync now")} onPress={() => void flush()} />
+          </View>
+        ) : null}
 
         <ErrorBanner styles={styles} message={error} />
         <ErrorBanner styles={styles} message={personError} />
@@ -1066,6 +1073,16 @@ function makeStyles(colors: ColorTheme) {
     padding: 12,
   },
   errorBannerText: {
+    color: colors.background,
+    fontWeight: "600",
+  },
+  offlineBanner: {
+    backgroundColor: colors.tint,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  offlineBannerText: {
     color: colors.background,
     fontWeight: "600",
   },

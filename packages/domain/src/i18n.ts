@@ -73,6 +73,8 @@ const el: Translations = {
   "Could not delete trip": "Δεν ήταν δυνατή η διαγραφή ταξιδιού",
   "Delete trip?": "Διαγραφή ταξιδιού;",
   "This cannot be undone.": "Αυτό δεν αναιρείται.",
+  "You are offline. Changes are saved locally and will sync when you are back online.": "Είσαι offline. Οι αλλαγές αποθηκεύονται τοπικά και θα συγχρονιστούν όταν είσαι ξανά online.",
+  "Sync now": "Συγχρονισμός τώρα",
   "Demo trip": "Demo ταξίδι",
   "Taxi": "Ταξί",
   "Hotel": "Ξενοδοχείο",

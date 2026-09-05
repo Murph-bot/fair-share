@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchTrip, saveTrip } from "../api/tripApi";
+import { enqueue, flushQueue, hasQueued } from "../api/mutationQueue";
+import { isOnline } from "../api/networkStatus";
 import { saveRecentTrip } from "../api/recentTrips";
 import type { Trip } from "../domain";
 import type { PublicTrip } from "../domain/photos";
@@ -10,8 +12,10 @@ export type UseTripResult = {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  queued: boolean;
   reload: () => Promise<void>;
   mutate: (transform: (trip: Trip) => Trip) => Promise<boolean>;
+  flush: () => Promise<void>;
 };
 
 function errorMessage(error: unknown): string {
@@ -22,6 +26,7 @@ export function useTrip(tripId: string | null): UseTripResult {
   const [trip, setTrip] = useState<PublicTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tripRef = useRef<PublicTrip | null>(null);
   const savingRef = useRef(false);
@@ -41,6 +46,8 @@ export function useTrip(tripId: string | null): UseTripResult {
     setLoading(true);
     setError(null);
     try {
+      await flushQueue();
+      setQueued(await hasQueued(tripId));
       const nextTrip = await fetchTrip(tripId);
       tripRef.current = nextTrip;
       setTrip(nextTrip);
@@ -76,8 +83,17 @@ export function useTrip(tripId: string | null): UseTripResult {
       setSaving(true);
       savingRef.current = true;
       setError(null);
+      setQueued(false);
       try {
         const nextTrip = transform(current);
+        const online = await isOnline();
+        if (!online) {
+          await enqueue(tripId, nextTrip);
+          tripRef.current = nextTrip as PublicTrip;
+          setTrip(nextTrip as PublicTrip);
+          setQueued(true);
+          return true;
+        }
         const savedTrip = await saveTrip(tripId, nextTrip);
         tripRef.current = savedTrip;
         setTrip(savedTrip);
@@ -93,12 +109,27 @@ export function useTrip(tripId: string | null): UseTripResult {
     [tripId],
   );
 
+  const flush = useCallback(async () => {
+    try {
+      setSaving(true);
+      await flushQueue();
+      setQueued(await hasQueued(tripId ?? ""));
+      await reload();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setSaving(false);
+    }
+  }, [tripId, reload]);
+
   return {
     trip,
     loading,
     saving,
     error,
+    queued,
     reload,
     mutate,
+    flush,
   };
 }
