@@ -3,14 +3,34 @@ import "../global.css";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, useColorScheme } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { configurePhotoSessionStore } from "../api/photoSession";
 import { createSecureTokenStore } from "../api/secureTokenStore";
-import { Colors } from "../constants/theme";
+import { Colors, type ColorTheme } from "../constants/theme";
+
+function makeStyles(colors: ColorTheme) {
+  return StyleSheet.create({
+    loadingContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 16,
+    },
+    loadingTitle: {
+      fontSize: 32,
+      fontWeight: "700",
+      color: colors.text,
+    },
+  });
+}
 
 export default function RootLayout() {
+  const scheme = useColorScheme();
+  const colors = scheme === "dark" ? Colors.dark : Colors.light;
+  const styles = makeStyles(colors);
   const [storeReady, setStoreReady] = useState(false);
 
   useEffect(() => {
@@ -46,18 +66,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 16,
-  },
-  loadingTitle: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: Colors.light.text,
-  },
-});

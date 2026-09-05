@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   TextInput,
+  useColorScheme,
   View,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 import { Link, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -30,7 +33,7 @@ import { loadPhotoPin } from "../../api/photoSession";
 import { apiBaseUrl } from "../../api/client";
 import { Moments } from "../../components/moments";
 import { useTrip } from "../../hooks/useTrip";
-import { Colors } from "../../constants/theme";
+import { Colors, type ColorTheme } from "../../constants/theme";
 
 function createExpenseId(): string {
   return `expense-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -76,7 +79,9 @@ function formatParticipants(expense: Expense): string {
   return `${parts} · ${weighted.join(" ")}`;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+type Styles = ReturnType<typeof makeStyles>;
+
+function Section({ title, children, styles }: { title: string; children: React.ReactNode; styles: Styles }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -89,10 +94,12 @@ function ChipButton({
   label,
   selected,
   onPress,
+  styles,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  styles: Styles;
 }) {
   return (
     <Pressable
@@ -105,7 +112,7 @@ function ChipButton({
   );
 }
 
-function StepButton({ label, onPress }: { label: string; onPress: () => void }) {
+function StepButton({ label, onPress, styles }: { label: string; onPress: () => void; styles: Styles }) {
   return (
     <Pressable onPress={onPress} style={styles.stepButton} accessibilityRole="button">
       <Text style={styles.stepButtonText}>{label}</Text>
@@ -119,12 +126,14 @@ function Field({
   onChangeText,
   placeholder,
   keyboardType,
+  styles,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder?: string;
   keyboardType?: "default" | "numeric" | "decimal-pad";
+  styles: Styles;
 }) {
   return (
     <View style={styles.field}>
@@ -142,7 +151,7 @@ function Field({
   );
 }
 
-function ErrorBanner({ message }: { message: string | null }) {
+function ErrorBanner({ message, styles }: { message: string | null; styles: Styles }) {
   if (!message) {
     return null;
   }
@@ -164,6 +173,11 @@ export default function TripScreen() {
   const [expenseDraft, setExpenseDraft] = useState<ExpenseDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [photoPin, setPhotoPin] = useState<string | null>(null);
+  const [qrVisible, setQrVisible] = useState(false);
+
+  const scheme = useColorScheme();
+  const colors = scheme === "dark" ? Colors.dark : Colors.light;
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const tripUrl = useMemo(() => {
     if (!tripId) {
@@ -424,9 +438,9 @@ export default function TripScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
           <Text style={styles.title}>Trip not found</Text>
-          <ErrorBanner message={error} />
+          <ErrorBanner styles={styles} message={error} />
           <View style={styles.rowGap}>
-            <StepButton label="Retry" onPress={() => void reload()} />
+            <StepButton styles={styles} label="Retry" onPress={() => void reload()} />
             <Link href="/" asChild>
               <Pressable style={styles.secondaryButton} accessibilityRole="button">
                 <Text style={styles.secondaryButtonText}>Open another trip</Text>
@@ -462,16 +476,19 @@ export default function TripScreen() {
           <Pressable style={styles.secondaryButton} onPress={() => void handleSharePin()} accessibilityRole="button" accessibilityLabel="Share photos PIN">
             <Text style={styles.secondaryButtonText}>Share PIN</Text>
           </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => setQrVisible(true)} accessibilityRole="button" accessibilityLabel="Show QR code for trip link">
+            <Text style={styles.secondaryButtonText}>Show QR</Text>
+          </Pressable>
           <Pressable style={styles.secondaryButton} onPress={() => void handleExportJson()} accessibilityRole="button" accessibilityLabel="Export trip JSON">
             <Text style={styles.secondaryButtonText}>Export JSON</Text>
           </Pressable>
         </View>
 
-        <ErrorBanner message={error} />
-        <ErrorBanner message={personError} />
-        <ErrorBanner message={formError} />
+        <ErrorBanner styles={styles} message={error} />
+        <ErrorBanner styles={styles} message={personError} />
+        <ErrorBanner styles={styles} message={formError} />
 
-        <Section title="People">
+        <Section styles={styles} title="People">
           <View style={styles.rowWrap}>
             {trip.people.map((person) => (
               <View key={person} style={styles.personTag}>
@@ -482,7 +499,7 @@ export default function TripScreen() {
 
           <View style={styles.fieldRow}>
             <View style={styles.flexGrow}>
-              <Field
+              <Field styles={styles}
                 label="Add person"
                 value={personName}
                 onChangeText={(value) => {
@@ -492,12 +509,12 @@ export default function TripScreen() {
                 placeholder="Name"
               />
             </View>
-            <StepButton label="Add" onPress={() => void handleAddPerson()} />
+            <StepButton styles={styles} label="Add" onPress={() => void handleAddPerson()} />
           </View>
         </Section>
 
-        <Section title={editingExpenseId ? "Edit expense" : "Add expense"}>
-          <Field
+        <Section styles={styles} title={editingExpenseId ? "Edit expense" : "Add expense"}>
+          <Field styles={styles}
             label="Description"
             value={draft.description}
             onChangeText={(value) =>
@@ -505,7 +522,7 @@ export default function TripScreen() {
             }
             placeholder="Dinner"
           />
-          <Field
+          <Field styles={styles}
             label="Amount"
             value={draft.amount}
             onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, amount: value } : current))}
@@ -523,6 +540,7 @@ export default function TripScreen() {
                 onPress={() =>
                   setExpenseDraft((current) => (current ? { ...current, payer: person } : current))
                 }
+                styles={styles}
               />
             ))}
           </View>
@@ -535,6 +553,7 @@ export default function TripScreen() {
                 label={person}
                 selected={draft.participants[person] ?? false}
                 onPress={() => toggleParticipant(person)}
+                styles={styles}
               />
             ))}
           </View>
@@ -547,6 +566,7 @@ export default function TripScreen() {
                 current ? { ...current, weighted: !current.weighted } : current,
               )
             }
+            styles={styles}
           />
 
           {draft.weighted ? (
@@ -568,7 +588,7 @@ export default function TripScreen() {
           ) : null}
 
           <View style={styles.rowGap}>
-            <StepButton label={saving ? "Saving…" : editingExpenseId ? "Save changes" : "Add expense"} onPress={() => void handleSaveExpense()} />
+            <StepButton styles={styles} label={saving ? "Saving…" : editingExpenseId ? "Save changes" : "Add expense"} onPress={() => void handleSaveExpense()} />
             {editingExpenseId ? (
               <Pressable style={styles.secondaryButton} onPress={handleCancelEdit} accessibilityRole="button">
                 <Text style={styles.secondaryButtonText}>Cancel edit</Text>
@@ -577,7 +597,7 @@ export default function TripScreen() {
           </View>
         </Section>
 
-        <Section title="Expenses">
+        <Section styles={styles} title="Expenses">
           {trip.expenses.length === 0 ? <Text style={styles.mutedText}>No expenses yet. Add one above.</Text> : null}
           <View style={styles.listGap}>
             {trip.expenses.map((expense) => (
@@ -586,7 +606,7 @@ export default function TripScreen() {
                 <Text style={styles.mutedText}>{expense.payer} paid {centsToEuro(expense.amount_cents)}</Text>
                 <Text style={styles.cardBody}>{formatParticipants(expense)}</Text>
                 <View style={styles.rowGap}>
-                  <StepButton label="Edit" onPress={() => handleEditExpense(expense)} />
+                  <StepButton styles={styles} label="Edit" onPress={() => handleEditExpense(expense)} />
                   <Pressable
                     style={styles.dangerButton}
                     onPress={() => handleRemoveExpense(expense.id, expense.description)}
@@ -600,7 +620,7 @@ export default function TripScreen() {
           </View>
         </Section>
 
-        <Section title="Balances">
+        <Section styles={styles} title="Balances">
           {trip.expenses.length === 0 ? null : (
             <Text style={styles.explainer}>Positive = owed to this person. Negative = this person owes money.</Text>
           )}
@@ -618,7 +638,7 @@ export default function TripScreen() {
           </View>
         </Section>
 
-        <Section title="Who pays whom">
+        <Section styles={styles} title="Who pays whom">
           {payments.length === 0 ? <Text style={styles.mutedText}>All settled — no payments needed.</Text> : null}
           <View style={styles.listGap}>
             {payments.map((payment) => (
@@ -630,18 +650,44 @@ export default function TripScreen() {
           </View>
         </Section>
 
-        <Section title="Moments">
+        <Section styles={styles} title="Moments">
           {tripId ? <Moments tripId={tripId} trip={trip} onTripLocked={() => void reload()} /> : null}
         </Section>
       </ScrollView>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={qrVisible}
+        onRequestClose={() => setQrVisible(false)}
+        accessibilityLabel="Trip QR code"
+      >
+        <View style={[styles.centered, { backgroundColor: "rgba(0,0,0,0.4)" }]}>
+          <View style={[styles.section, { alignItems: "center" }]}>
+            {tripUrl ? (
+              <QRCode
+                value={tripUrl}
+                size={220}
+                color={colors.text}
+                backgroundColor={colors.background}
+              />
+            ) : null}
+            <Text style={styles.mutedText}>Scan to open this trip.</Text>
+            <Pressable style={styles.stepButton} onPress={() => setQrVisible(false)} accessibilityRole="button">
+              <Text style={styles.stepButtonText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(colors: ColorTheme) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: 20,
@@ -660,10 +706,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: Colors.light.text,
+    color: colors.text,
   },
   mutedText: {
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
     fontSize: 14,
   },
   actionRow: {
@@ -672,17 +718,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   section: {
-    backgroundColor: Colors.light.backgroundElement,
+    backgroundColor: colors.backgroundElement,
     borderRadius: 16,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: Colors.light.rule,
+    borderColor: colors.rule,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: Colors.light.text,
+    color: colors.text,
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -692,16 +738,16 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
   },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: Colors.light.rule,
+    borderColor: colors.rule,
     borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: Colors.light.background,
-    color: Colors.light.text,
+    backgroundColor: colors.background,
+    color: colors.text,
     fontSize: 16,
   },
   fieldRow: {
@@ -727,97 +773,97 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   personTag: {
-    backgroundColor: "#efe5d4",
+    backgroundColor: colors.backgroundElement,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   personTagText: {
-    color: "#5c3b1e",
+    color: colors.tint,
     fontWeight: "600",
   },
   chip: {
     borderWidth: 1,
-    borderColor: Colors.light.rule,
+    borderColor: colors.rule,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
   },
   chipSelected: {
-    backgroundColor: Colors.light.text,
-    borderColor: Colors.light.text,
+    backgroundColor: colors.text,
+    borderColor: colors.text,
   },
   chipText: {
-    color: Colors.light.text,
+    color: colors.text,
     fontWeight: "600",
   },
   chipTextSelected: {
-    color: Colors.light.background,
+    color: colors.background,
   },
   stepButton: {
     minHeight: 48,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: Colors.light.text,
+    backgroundColor: colors.text,
     alignItems: "center",
     justifyContent: "center",
   },
   stepButtonText: {
-    color: Colors.light.background,
+    color: colors.background,
     fontWeight: "700",
   },
   secondaryButton: {
     minHeight: 48,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: "#efe5d4",
+    backgroundColor: colors.backgroundElement,
     alignItems: "center",
     justifyContent: "center",
   },
   secondaryButtonText: {
-    color: "#5c3b1e",
+    color: colors.tint,
     fontWeight: "700",
   },
   dangerButton: {
     minHeight: 44,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: "#fee2e2",
+    backgroundColor: colors.negative,
     alignItems: "center",
     justifyContent: "center",
   },
   dangerButtonText: {
-    color: Colors.light.negative,
+    color: colors.background,
     fontWeight: "700",
   },
   errorBanner: {
-    backgroundColor: "#fee2e2",
+    backgroundColor: colors.negative,
     borderRadius: 12,
     padding: 12,
   },
   errorBannerText: {
-    color: "#991b1b",
+    color: colors.background,
     fontWeight: "600",
   },
   card: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#eadfcf",
+    borderColor: colors.rule,
     padding: 14,
     gap: 8,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: Colors.light.text,
+    color: colors.text,
   },
   cardBody: {
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
   },
   explainer: {
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
     fontSize: 14,
   },
   balanceRow: {
@@ -828,13 +874,13 @@ const styles = StyleSheet.create({
   },
   balanceValue: {
     fontWeight: "700",
-    color: Colors.light.text,
+    color: colors.text,
   },
   positive: {
-    color: Colors.light.positive,
+    color: colors.positive,
   },
   negative: {
-    color: Colors.light.negative,
+    color: colors.negative,
   },
   weightList: {
     gap: 8,
@@ -847,7 +893,7 @@ const styles = StyleSheet.create({
   weightName: {
     minWidth: 90,
     fontWeight: "600",
-    color: Colors.light.text,
+    color: colors.text,
   },
   weightInput: {
     flex: 1,
@@ -859,4 +905,5 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 16,
   },
-});
+  });
+}

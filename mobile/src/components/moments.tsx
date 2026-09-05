@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useColorScheme,
   View,
 } from "react-native";
 
@@ -22,7 +23,7 @@ import {
 } from "../api/photoApi";
 import { loadPhotoToken } from "../api/photoSession";
 import type { PhotoRecord, PublicTrip } from "../domain/photos";
-import { Colors } from "../constants/theme";
+import { Colors, type ColorTheme } from "../constants/theme";
 import { photoAccessState, shouldOfferLockCta } from "../utils/photoAccess";
 import { pickCompressedPhoto } from "../utils/pickPhoto";
 
@@ -32,6 +33,81 @@ type MomentsProps = {
   onTripLocked?: (pin: string) => void;
 };
 
+function makeStyles(colors: ColorTheme) {
+  return StyleSheet.create({
+    stack: {
+      gap: 12,
+    },
+    muted: {
+      color: colors.textSecondary,
+      fontSize: 14,
+    },
+    error: {
+      color: colors.negative,
+      fontWeight: "600",
+    },
+    input: {
+      minHeight: 48,
+      borderWidth: 1,
+      borderColor: colors.rule,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontSize: 16,
+    },
+    button: {
+      minHeight: 48,
+      borderRadius: 12,
+      backgroundColor: colors.text,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonText: {
+      color: colors.background,
+      fontWeight: "700",
+    },
+    secondary: {
+      minHeight: 48,
+      borderRadius: 12,
+      backgroundColor: colors.backgroundElement,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    secondaryText: {
+      color: colors.tint,
+      fontWeight: "700",
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+    },
+    tile: {
+      width: "47%",
+      gap: 8,
+    },
+    thumb: {
+      width: "100%",
+      aspectRatio: 1,
+      borderRadius: 12,
+      backgroundColor: colors.backgroundElement,
+    },
+    tileActions: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    link: {
+      color: colors.tint,
+      fontWeight: "700",
+    },
+    danger: {
+      color: colors.negative,
+      fontWeight: "700",
+    },
+  });
+}
+
 export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   const [hasToken, setHasToken] = useState(false);
   const [photos, setPhotos] = useState<PhotoRecord[]>([]);
@@ -39,6 +115,9 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const scheme = useColorScheme();
+  const colors = scheme === "dark" ? Colors.dark : Colors.light;
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const access = photoAccessState(trip.photos_locked, hasToken);
   const offerLock = shouldOfferLockCta(trip.photos_locked);
@@ -212,7 +291,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {busy ? <ActivityIndicator color={Colors.light.tint} /> : null}
+      {busy ? <ActivityIndicator color={colors.tint} /> : null}
       {photos.length === 0 ? <Text style={styles.muted}>No photos yet. Add one above.</Text> : null}
       <View style={styles.grid}>
         {photos.map((photo, index) => (
@@ -248,76 +327,3 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  stack: {
-    gap: 12,
-  },
-  muted: {
-    color: Colors.light.textSecondary,
-    fontSize: 14,
-  },
-  error: {
-    color: Colors.light.negative,
-    fontWeight: "600",
-  },
-  input: {
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: Colors.light.rule,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.light.background,
-    color: Colors.light.text,
-    fontSize: 16,
-  },
-  button: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: Colors.light.text,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonText: {
-    color: Colors.light.background,
-    fontWeight: "700",
-  },
-  secondary: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: "#efe5d4",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryText: {
-    color: "#5c3b1e",
-    fontWeight: "700",
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  tile: {
-    width: "47%",
-    gap: 8,
-  },
-  thumb: {
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: 12,
-    backgroundColor: "#efe5d4",
-  },
-  tileActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  link: {
-    color: Colors.light.tint,
-    fontWeight: "700",
-  },
-  danger: {
-    color: Colors.light.negative,
-    fontWeight: "700",
-  },
-});

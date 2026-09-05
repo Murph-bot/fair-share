@@ -1,15 +1,103 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { createRemoteTrip } from "../api/tripApi";
 import { savePhotoPin, savePhotoToken } from "../api/photoSession";
 import { DonateButton } from "../components/donate-button";
-import { Colors } from "../constants/theme";
+import { Colors, type ColorTheme } from "../constants/theme";
 import { parseTripInput } from "../utils/parseTripInput";
 
+function makeStyles(colors: ColorTheme) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flex: 1,
+      padding: 24,
+      justifyContent: "center",
+      gap: 20,
+    },
+    kicker: {
+      fontSize: 12,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: colors.textSecondary,
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: "700",
+      color: colors.text,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      marginBottom: 8,
+    },
+    section: {
+      gap: 12,
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.text,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    input: {
+      minHeight: 52,
+      borderWidth: 1,
+      borderColor: colors.rule,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      backgroundColor: colors.backgroundElement,
+      color: colors.text,
+      fontSize: 16,
+    },
+    button: {
+      minHeight: 52,
+      borderRadius: 12,
+      backgroundColor: colors.text,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonDisabled: {
+      opacity: 0.55,
+    },
+    buttonText: {
+      color: colors.background,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    secondaryButton: {
+      minHeight: 52,
+      borderRadius: 12,
+      backgroundColor: colors.backgroundElement,
+      borderWidth: 1,
+      borderColor: colors.text,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    secondaryButtonText: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+    error: {
+      color: colors.negative,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+  });
+}
+
 export default function HomeScreen() {
+  const scheme = useColorScheme();
+  const colors = scheme === "dark" ? Colors.dark : Colors.light;
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const [tripName, setTripName] = useState("");
   const [tripInput, setTripInput] = useState("");
@@ -113,86 +201,3 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  container: {
-    flex: 1,
-    padding: 24,
-    justifyContent: "center",
-    gap: 20,
-  },
-  kicker: {
-    fontSize: 12,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: Colors.light.textSecondary,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: Colors.light.text,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-    marginBottom: 8,
-  },
-  section: {
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.light.text,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  input: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderColor: Colors.light.rule,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.light.backgroundElement,
-    color: Colors.light.text,
-    fontSize: 16,
-  },
-  button: {
-    minHeight: 52,
-    borderRadius: 12,
-    backgroundColor: Colors.light.text,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.55,
-  },
-  buttonText: {
-    color: Colors.light.background,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  secondaryButton: {
-    minHeight: 52,
-    borderRadius: 12,
-    backgroundColor: Colors.light.backgroundElement,
-    borderWidth: 1,
-    borderColor: Colors.light.text,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryButtonText: {
-    color: Colors.light.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  error: {
-    color: Colors.light.negative,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-});

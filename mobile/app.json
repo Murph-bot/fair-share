@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fairshare",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "runtimeVersion": {
       "policy": "appVersion"
     },

@@ -1,4 +1,6 @@
+import { showQrDialog } from "../qr";
 import { fetchTrip, saveTrip, type PublicTrip } from "../api";
+import { getTheme, themeButtonHtml, toggleTheme } from "../theme";
 import {
   addExpense,
   addPerson,
@@ -218,6 +220,7 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
 
 function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: string | null = null): void {
   const hasPin = Boolean(loadPhotoPin(id));
+  const themeLabel = getTheme() === "dark" ? "Light" : "Dark";
   const editing = editingId ? trip.expenses.find((e) => e.id === editingId) ?? null : null;
   root.innerHTML = `
     <header class="topbar">
@@ -228,7 +231,9 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       <div class="topbar-actions">
         <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"}>Copy PIN</button>
         <button type="button" id="copy-link">Copy link</button>
+        <button type="button" id="show-qr">Show QR</button>
         <button type="button" id="download-json">Download JSON</button>
+        ${themeButtonHtml(themeLabel)}
       </div>
     </header>
     <p id="banner" class="err" role="alert" aria-live="assertive" hidden></p>
@@ -298,6 +303,18 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
 
   root.querySelector("#copy-link")?.addEventListener("click", () => {
     void copyWithFeedback("copy-link", "Link", window.location.href);
+  });
+
+  root.querySelector("#show-qr")?.addEventListener("click", () => {
+    void showQrDialog(window.location.href);
+  });
+
+  const themeToggle = root.querySelector("#theme-toggle") as HTMLButtonElement | null;
+  themeToggle?.addEventListener("click", () => {
+    const next = toggleTheme();
+    if (themeToggle) {
+      themeToggle.textContent = next === "dark" ? "Light" : "Dark";
+    }
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-share-from]").forEach((button) => {

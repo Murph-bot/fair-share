@@ -4,6 +4,7 @@ import { announce } from "../announce";
 import { escapeHtml } from "../escape";
 import { savePhotoPin, savePhotoToken } from "../photo-session";
 import { loadRecents } from "../recents";
+import { getTheme, themeButtonHtml, toggleTheme } from "../theme";
 
 function extractTripId(raw: string): string | null {
   const input = raw.trim();
@@ -41,9 +42,14 @@ export function renderHome(root: HTMLElement): void {
           )
           .join("")}</ul>`;
 
+  const themeLabel = getTheme() === "dark" ? "Light" : "Dark";
+
   root.innerHTML = `
     <main class="page home">
-      <p class="kicker">Fair Share</p>
+      <div class="home-header">
+        <p class="kicker">Fair Share</p>
+        ${themeButtonHtml(themeLabel)}
+      </div>
       <h1>Split trip expenses fairly</h1>
       <p class="lede">Create a trip, add people, and share the link. No accounts, no ads.</p>
 
@@ -131,6 +137,12 @@ export function renderHome(root: HTMLElement): void {
 
   importBtn.addEventListener("click", () => {
     importInput.click();
+  });
+
+  const themeToggle = root.querySelector("#theme-toggle") as HTMLButtonElement | null;
+  themeToggle?.addEventListener("click", () => {
+    const next = toggleTheme();
+    themeToggle.textContent = next === "dark" ? "Light" : "Dark";
   });
 
   importInput.addEventListener("change", async () => {

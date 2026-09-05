@@ -1,6 +1,9 @@
 import { TRIP_ID_RE } from "@fairshare/domain";
+import { initTheme } from "./theme";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
+
+initTheme();
 
 const app = document.getElementById("app");
 if (!app) {
