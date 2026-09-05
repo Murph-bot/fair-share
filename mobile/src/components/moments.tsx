@@ -24,6 +24,7 @@ import {
 import { loadPhotoToken } from "../api/photoSession";
 import type { PhotoRecord, PublicTrip } from "../domain/photos";
 import { Colors, type ColorTheme } from "../constants/theme";
+import { useTranslation } from "../i18n";
 import { photoAccessState, shouldOfferLockCta } from "../utils/photoAccess";
 import { pickCompressedPhoto } from "../utils/pickPhoto";
 
@@ -109,6 +110,7 @@ function makeStyles(colors: ColorTheme) {
 }
 
 export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
+  const { t } = useTranslation();
   const [hasToken, setHasToken] = useState(false);
   const [photos, setPhotos] = useState<PhotoRecord[]>([]);
   const [pin, setPin] = useState("");
@@ -142,7 +144,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
           await refresh();
         } catch (caught) {
           if (!cancelled) {
-            setError(caught instanceof Error ? caught.message : "Could not load photos");
+            setError(caught instanceof Error ? caught.message : t("Could not load photos"));
           }
         }
       }
@@ -161,7 +163,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       setPin("");
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not unlock photos");
+      setError(caught instanceof Error ? caught.message : t("Could not unlock photos"));
     } finally {
       setBusy(false);
     }
@@ -170,7 +172,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   const handleLock = async () => {
     const chosen = pin.trim();
     if (chosen && !/^\d{6}$/.test(chosen)) {
-      setError("PIN must be 6 digits");
+      setError(t("PIN must be 6 digits"));
       return;
     }
     setBusy(true);
@@ -180,10 +182,10 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       setHasToken(true);
       setPin("");
       onTripLocked?.(result.pin);
-      Alert.alert("Photos locked", `Save this PIN: ${result.pin}`);
+      Alert.alert(t("Photos locked"), t("Save this PIN: {{pin}}", { pin: result.pin }));
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not lock photos");
+      setError(caught instanceof Error ? caught.message : t("Could not lock photos"));
     } finally {
       setBusy(false);
     }
@@ -213,17 +215,17 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       await uploadPhoto(tripId, picked.display, extras);
       await refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not upload photo");
+      setError(caught instanceof Error ? caught.message : t("Could not upload photo"));
     } finally {
       setBusy(false);
     }
   };
 
   const handleDelete = (photo: PhotoRecord) => {
-    Alert.alert("Delete this photo permanently?", undefined, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("Delete this photo permanently?"), undefined, [
+      { text: t("Cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: t("Delete"),
         style: "destructive",
         onPress: () => {
           void (async () => {
@@ -233,7 +235,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
               await deletePhoto(tripId, photo.id);
               await refresh();
             } catch (caught) {
-              setError(caught instanceof Error ? caught.message : "Could not delete photo");
+              setError(caught instanceof Error ? caught.message : t("Could not delete photo"));
             } finally {
               setBusy(false);
             }
@@ -244,25 +246,25 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   };
 
   if (!ready) {
-    return <Text style={styles.muted}>Loading photos…</Text>;
+    return <Text style={styles.muted}>{t("Loading photos…")}</Text>;
   }
 
   if (access === "locked") {
     return (
       <View style={styles.stack}>
-        <Text style={styles.muted}>Enter the trip PIN to view and add photos. Expenses stay open without it.</Text>
+        <Text style={styles.muted}>{t("Enter the trip PIN to view and add photos. Expenses stay open without it.")}</Text>
         <TextInput
           value={pin}
           onChangeText={setPin}
-          placeholder="6-digit PIN"
+          placeholder={t("6-digit PIN")}
           keyboardType="number-pad"
           maxLength={6}
           style={styles.input}
-          accessibilityLabel="Photos PIN"
+          accessibilityLabel={t("Photos PIN")}
         />
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={styles.button} onPress={() => void handleUnlock()} disabled={busy} accessibilityRole="button">
-          <Text style={styles.buttonText}>{busy ? "Unlocking…" : "Unlock"}</Text>
+          <Text style={styles.buttonText}>{busy ? t("Unlocking…") : t("Unlock")}</Text>
         </Pressable>
       </View>
     );
@@ -271,28 +273,28 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   return (
     <View style={styles.stack}>
       <Pressable style={styles.button} onPress={() => void handleUpload()} disabled={busy} accessibilityRole="button">
-        <Text style={styles.buttonText}>{busy ? "Working…" : "Add a photo"}</Text>
+        <Text style={styles.buttonText}>{busy ? t("Working…") : t("Add a photo")}</Text>
       </Pressable>
       {offerLock ? (
         <View style={styles.stack}>
-          <Text style={styles.muted}>Photos on this trip are not locked with a PIN.</Text>
+          <Text style={styles.muted}>{t("Photos on this trip are not locked with a PIN.")}</Text>
           <TextInput
             value={pin}
             onChangeText={setPin}
-            placeholder="6-digit PIN (optional)"
+            placeholder={t("6-digit PIN (optional)")}
             keyboardType="number-pad"
             maxLength={6}
             style={styles.input}
-            accessibilityLabel="Choose 6-digit PIN"
+            accessibilityLabel={t("Choose 6-digit PIN")}
           />
           <Pressable style={styles.secondary} onPress={() => void handleLock()} disabled={busy} accessibilityRole="button">
-            <Text style={styles.secondaryText}>Lock photos with a PIN</Text>
+            <Text style={styles.secondaryText}>{t("Lock photos with a PIN")}</Text>
           </Pressable>
         </View>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {busy ? <ActivityIndicator color={colors.tint} /> : null}
-      {photos.length === 0 ? <Text style={styles.muted}>No photos yet. Add one above.</Text> : null}
+      {photos.length === 0 ? <Text style={styles.muted}>{t("No photos yet. Add one above.")}</Text> : null}
       <View style={styles.grid}>
         {photos.map((photo, index) => (
           <View key={photo.id} style={styles.tile}>
@@ -300,25 +302,25 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
               source={{ uri: photo.thumbUrl }}
               style={styles.thumb}
               accessibilityRole="image"
-              accessibilityLabel={`Photo ${index + 1} of ${photos.length} from ${trip.name}`}
+              accessibilityLabel={t("Photo {{index}} of {{total}} from {{trip}}", { index: String(index + 1), total: String(photos.length), trip: trip.name })}
             />
             <View style={styles.tileActions}>
               {photo.originalUrl?.startsWith("https://") ? (
                 <Pressable
                   onPress={() => void Linking.openURL(photo.originalUrl as string)}
                   accessibilityRole="link"
-                  accessibilityLabel="Open original photo"
+                  accessibilityLabel={t("Open original photo")}
                 >
-                  <Text style={styles.link}>Original</Text>
+                  <Text style={styles.link}>{t("Original")}</Text>
                 </Pressable>
               ) : null}
               <Pressable
                 onPress={() => handleDelete(photo)}
                 accessibilityRole="button"
-                accessibilityLabel="Delete photo"
-                accessibilityHint="Removes this photo from the trip"
+                accessibilityLabel={t("Delete photo")}
+                accessibilityHint={t("Removes this photo from the trip")}
               >
-                <Text style={styles.danger}>Delete</Text>
+                <Text style={styles.danger}>{t("Delete")}</Text>
               </Pressable>
             </View>
           </View>

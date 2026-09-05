@@ -7,6 +7,7 @@ import { createRemoteTrip } from "../api/tripApi";
 import { savePhotoPin, savePhotoToken } from "../api/photoSession";
 import { DonateButton } from "../components/donate-button";
 import { Colors, type ColorTheme } from "../constants/theme";
+import { useTranslation } from "../i18n";
 import { parseTripInput } from "../utils/parseTripInput";
 
 function makeStyles(colors: ColorTheme) {
@@ -98,6 +99,7 @@ export default function HomeScreen() {
   const scheme = useColorScheme();
   const colors = scheme === "dark" ? Colors.dark : Colors.light;
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { t } = useTranslation();
   const router = useRouter();
   const [tripName, setTripName] = useState("");
   const [tripInput, setTripInput] = useState("");
@@ -107,7 +109,7 @@ export default function HomeScreen() {
   const handleCreateTrip = async () => {
     const name = tripName.trim();
     if (!name) {
-      setError("Enter a trip name to get started");
+      setError(t("Enter a trip name to get started"));
       return;
     }
 
@@ -119,7 +121,7 @@ export default function HomeScreen() {
       savePhotoToken(created.id, created.photos_token);
       router.push({ pathname: "/t/[id]", params: { id: created.id } });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not create trip");
+      setError(caught instanceof Error ? caught.message : t("Could not create trip"));
       setBusy(false);
     }
   };
@@ -138,23 +140,23 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Text style={styles.kicker}>Fair Share</Text>
-        <Text style={styles.title}>Split trip expenses fairly</Text>
-        <Text style={styles.subtitle}>Create a trip, add people, and share the link. No accounts, no ads.</Text>
+        <Text style={styles.kicker}>{t("Fair Share")}</Text>
+        <Text style={styles.title}>{t("Split trip expenses fairly")}</Text>
+        <Text style={styles.subtitle}>{t("Create a trip, add people, and share the link. No accounts, no ads.")}</Text>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Create a trip</Text>
+          <Text style={styles.sectionTitle}>{t("Create a trip")}</Text>
           <TextInput
             value={tripName}
             onChangeText={(value) => {
               setTripName(value);
               if (error) setError(null);
             }}
-            placeholder="Athens weekend"
+            placeholder={t("Athens weekend")}
             autoCapitalize="words"
             autoCorrect={false}
             style={styles.input}
-            accessibilityLabel="Trip name"
+            accessibilityLabel={t("Trip name")}
             editable={!busy}
           />
           <Pressable
@@ -162,25 +164,25 @@ export default function HomeScreen() {
             onPress={() => void handleCreateTrip()}
             disabled={busy}
             accessibilityRole="button"
-            accessibilityLabel="Create trip"
+            accessibilityLabel={t("Create trip")}
           >
-            <Text style={styles.buttonText}>{busy ? "Creating…" : "Create trip"}</Text>
+            <Text style={styles.buttonText}>{busy ? t("Creating…") : t("Create trip")}</Text>
           </Pressable>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Open a trip</Text>
+          <Text style={styles.sectionTitle}>{t("Open a trip")}</Text>
           <TextInput
             value={tripInput}
             onChangeText={(value) => {
               setTripInput(value);
               if (error) setError(null);
             }}
-            placeholder="Paste a Fair Share link"
+            placeholder={t("Paste a Fair Share link")}
             autoCapitalize="none"
             autoCorrect={false}
             style={styles.input}
-            accessibilityLabel="Trip link or ID"
+            accessibilityLabel={t("Trip link or ID")}
             editable={!busy}
           />
           <Pressable
@@ -188,9 +190,9 @@ export default function HomeScreen() {
             onPress={handleOpenTrip}
             disabled={busy}
             accessibilityRole="button"
-            accessibilityLabel="Open trip"
+            accessibilityLabel={t("Open trip")}
           >
-            <Text style={styles.secondaryButtonText}>Open trip</Text>
+            <Text style={styles.secondaryButtonText}>{t("Open trip")}</Text>
           </Pressable>
         </View>
 

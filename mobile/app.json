@@ -51,7 +51,8 @@
           "photosPermission": "Fair Share uses your photo library so you can add trip photos to Moments."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-localization"
     ],
     "extra": {
       "donateUrl": ""

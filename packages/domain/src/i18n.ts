@@ -1,0 +1,204 @@
+export type Language = "en" | "el";
+
+export type Translations = Record<string, string>;
+
+const en: Translations = {
+  // Keys double as fallback English copy.
+};
+
+const el: Translations = {
+  "Fair Share": "Fair Share",
+  "Split trip expenses fairly": "Διαίρεση εξόδων ταξιδιού δίκαια",
+  "Create a trip, add people, and share the link. No accounts, no ads.":
+    "Δημιούργησε ένα ταξίδι, πρόσθεσε άτομα και μοιράσου τον σύνδεσμο. Χωρίς λογαριασμούς, χωρίς διαφημίσεις.",
+  "Create a trip": "Δημιουργία ταξιδιού",
+  "Trip name": "Όνομα ταξιδιού",
+  "Create trip": "Δημιουργία",
+  "Open a trip": "Άνοιγμα ταξιδιού",
+  "Paste a Fair Share link": "Επικόλληση συνδέσμου Fair Share",
+  "Open trip": "Άνοιγμα",
+  "Open JSON": "Άνοιγμα JSON",
+  "Money only. Photos stay on the hosted trip and are not in the file.":
+    "Μόνο χρήματα. Οι φωτογραφίες παραμένουν στο hosted ταξίδι και δεν είναι στο αρχείο.",
+  "Choose JSON file": "Επιλογή αρχείου JSON",
+  "On this device": "Σε αυτή τη συσκευή",
+  "No recent trips.": "Καμία πρόσφατη διαδρομή.",
+  "Could not create trip": "Δεν ήταν δυνατή η δημιουργία ταξιδιού",
+  "Could not open trip": "Δεν ήταν δυνατό το άνοιγμα ταξιδιού",
+  "Could not import file": "Δεν ήταν δυνατή η εισαγωγή αρχείου",
+  "Invalid trip link or ID.": "Μη έγκυρος σύνδεσμος ή ID ταξιδιού.",
+  "A trip name is required.": "Απαιτείται όνομα ταξιδιού.",
+  "Something went wrong. Please try again.": "Κάτι πήγε στραβά. Προσπάθησε ξανά.",
+  // Trip screen
+  "Fair share": "Fair Share",
+  "Copy PIN": "Αντιγραφή PIN",
+  "Copy link": "Αντιγραφή συνδέσμου",
+  "Show QR": "Εμφάνιση QR",
+  "Download JSON": "Λήψη JSON",
+  "PIN copied": "Το PIN αντιγράφηκε",
+  "Link copied": "Ο σύνδεσμος αντιγράφηκε",
+  "People": "Άτομα",
+  "Name": "Όνομα",
+  "Add person": "Προσθήκη ατόμου",
+  "Add": "Προσθήκη",
+  "Edit expense": "Επεξεργασία εξόδου",
+  "Add expense": "Προσθήκη εξόδου",
+  "Description": "Περιγραφή",
+  "Amount (€)": "Ποσό (€)",
+  "60 or 60.50": "60 ή 60,50",
+  "Who paid": "Ποιος πλήρωσε",
+  "Split between": "Διαίρεση μεταξύ",
+  "Split by shares": "Διαίρεση ανά μερίδια",
+  "If selected, give each person an integer share. Use 1 for an equal share, 2 for twice as much, etc.":
+    "Αν επιλεγεί, δώσε σε κάθε άτομο έναν ακέραιο αριθμό μεριδίων. Χρησιμοποίησε 1 για ίσο μερίδιο, 2 για διπλάσιο, κλπ.",
+  "Save expense": "Αποθήκευση εξόδου",
+  "Cancel": "Ακύρωση",
+  "Expenses": "Έξοδα",
+  "No expenses yet. Add one above.": "Κανένα έξοδο ακόμα. Πρόσθεσε ένα παραπάνω.",
+  "Edit": "Επεξεργασία",
+  "Remove": "Αφαίρεση",
+  "Remove {{description}}?": "Αφαίρεση {{description}};",
+  "Remove this expense?": "Αφαίρεση αυτού του εξόδου;",
+  "Balances": "Υπόλοιπα",
+  "Positive = owed to this person. Negative = this person owes money.":
+    "Θετικό = οφείλεται σε αυτό το άτομο. Αρνητικό = αυτό το άτομο χρωστάει.",
+  "Who pays whom": "Ποιος πληρώνει ποιον",
+  "All settled — no payments needed.": "Όλα εξοφλήθηκαν — δεν χρειάζονται πληρωμές.",
+  "Share": "Κοινοποίηση",
+  "{{from}} pays {{to}} {{amount}}": "{{from}} πληρώνει {{to}} {{amount}}",
+  "Moments": "Στιγμές",
+  "Add trip photos, share them through the trip link, and lock them with a 6-digit PIN so only people with the PIN can view them.":
+    "Πρόσθεσε φωτογραφίες ταξιδιού, μοιράσου τις μέσω του συνδέσμου του ταξιδιού και κλείδωσέ τες με ένα 6ψήφιο PIN, ώστε μόνο όσοι έχουν το PIN να μπορούν να τις δουν.",
+  "Add a photo": "Προσθήκη φωτογραφίας",
+  "Enter the trip PIN to view and add photos. Expenses stay open without it.":
+    "Εισήγαγε το PIN του ταξιδιού για να δεις και να προσθέσεις φωτογραφίες. Τα έξοδα παραμένουν ανοιχτά χωρίς αυτό.",
+  "Photos PIN": "PIN φωτογραφιών",
+  "6-digit PIN": "6ψήφιο PIN",
+  "Unlock": "Ξεκλείδωμα",
+  "Photos on this trip are not locked with a PIN.": "Οι φωτογραφίες δεν είναι κλειδωμένες με PIN.",
+  "Choose 6-digit PIN (optional)": "Επίλεξε 6ψήφιο PIN (προαιρετικό)",
+  "Lock photos with a PIN": "Κλείδωμα φωτογραφιών με PIN",
+  "Could not lock photos": "Δεν ήταν δυνατό το κλείδωμα φωτογραφιών",
+  "Could not add photo": "Δεν ήταν δυνατή η προσθήκη φωτογραφίας",
+  "Could not delete photo": "Δεν ήταν δυνατή η διαγραφή φωτογραφίας",
+  "Could not unlock photos": "Δεν ήταν δυνατό το ξεκλείδωμα φωτογραφιών",
+  "No photos yet. Add one above.": "Καμία φωτογραφία ακόμα. Πρόσθεσε μία παραπάνω.",
+  "Loading photos…": "Φόρτωση φωτογραφιών…",
+  "Photo from trip": "Φωτογραφία από το ταξίδι",
+  "Delete photo": "Διαγραφή φωτογραφίας",
+  "Open original photo": "Άνοιγμα πρωτοτύπου",
+  // Not found
+  "Not found": "Δεν βρέθηκε",
+  "Back to home": "Πίσω στην αρχική",
+  // Theme
+  "Light": "Φωτεινό",
+  "Dark": "Σκοτεινό",
+  // QR
+  "Trip QR code": "QR κωδικός ταξιδιού",
+  "Scan to open this trip.": "Σάρωσε για άνοιγμα αυτού του ταξιδιού.",
+  "QR code for the trip link": "QR κωδικός για τον σύνδεσμο του ταξιδιού",
+  // Generic
+  "Loading…": "Φόρτωση…",
+  "Creating…": "Δημιουργία…",
+  "Unlocking…": "Ξεκλείδωμα…",
+  // Mobile trip screen
+  "Change trip": "Αλλαγή ταξιδιού",
+  "Share trip": "Κοινοποίηση ταξιδιού",
+  "Share PIN": "Κοινοποίηση PIN",
+  "Export JSON": "Εξαγωγή JSON",
+  "Join the trip on Fair Share: {{url}}": "Μπες στο ταξίδι στο Fair Share: {{url}}",
+  "No PIN": "Κανένα PIN",
+  "Photos on this trip are not locked.": "Οι φωτογραφίες δεν είναι κλειδωμένες.",
+  "Photos PIN for the trip: {{pin}}": "PIN φωτογραφιών για το ταξίδι: {{pin}}",
+  "What the numbers mean": "Τι σημαίνουν οι αριθμοί",
+  "Split with": "Διαίρεση με",
+  "Weighted split": "Διαμοιρασμός με βάρη",
+  "Equal split": "Ίσος διαμοιρασμός",
+  "Save changes": "Αποθήκευση αλλαγών",
+  "Are you sure?": "Είσαι σίγουρος;",
+  "This action cannot be undone.": "Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.",
+  "Retry": "Επανάληψη",
+  "Add person to start.": "Πρόσθεσε άτομο για να ξεκινήσεις.",
+  "Add your first expense.": "Πρόσθεσε το πρώτο σου έξοδο.",
+  "Athens weekend": "Σαββατοκύριακο στην Αθήνα",
+  "Open an existing trip": "Άνοιγμα υπάρχοντος ταξιδιού",
+  "Trip link or ID": "Σύνδεσμος ή ID ταξιδιού",
+  "Paste a Fair Share link or the 32-character trip ID": "Επικόλληση συνδέσμου Fair Share ή του 32χαρακτηρου ID ταξιδιού",
+  "Trip created. PIN: {{pin}}": "Το ταξίδι δημιουργήθηκε. PIN: {{pin}}",
+  "Could not import that trip": "Δεν ήταν δυνατή η εισαγωγή αυτού του ταξιδιού",
+  "Enter a trip name to get started": "Εισήγαγε όνομα ταξιδιού για να ξεκινήσεις",
+  "Enter a person name": "Εισήγαγε όνομα ατόμου",
+  "Remove expense?": "Αφαίρεση εξόδου;",
+  "Enter an expense description": "Εισήγαγε περιγραφή εξόδου",
+  "Choose who paid": "Επίλεξε ποιος πλήρωσε",
+  "Select at least one participant": "Επίλεξε τουλάχιστον έναν συμμετέχοντα",
+  "Invalid amount": "Μη έγκυρο ποσό",
+  "Invalid weights": "Μη έγκυρα βάρη",
+  "Trip ID": "ID ταξιδιού",
+  "Share trip link": "Σύνδεσμος κοινοποίησης ταξιδιού",
+  "Share photos PIN": "Κοινοποίηση PIN φωτογραφιών",
+  "Export trip JSON": "Εξαγωγή ταξιδιού JSON",
+  "Dinner": "Δείπνο",
+  "Amount": "Ποσό",
+  "40.00": "40,00",
+  "Saving…": "Αποθήκευση…",
+  "Cancel edit": "Ακύρωση επεξεργασίας",
+  "paid": "πλήρωσε",
+  "Add the people who are sharing expenses.": "Πρόσθεσε τα άτομα που μοιράζονται τα έξοδα.",
+  "weights": "βάρη",
+  "Edit {{description}}": "Επεξεργασία {{description}}",
+  "Remove {{description}}": "Αφαίρεση {{description}}",
+  "No expenses recorded. Add expenses to see who owes what.": "Κανένα έξοδο καταγεγραμμένο. Πρόσθεσε έξοδα για να δεις ποιος χρωστάει τι.",
+  "Add expenses to see who pays whom.": "Πρόσθεσε έξοδα για να δεις ποιος πληρώνει ποιον.",
+  "Copy payment: {{from}} pays {{to}} {{amount}}": "Αντιγραφή πληρωμής: {{from}} πληρώνει {{to}} {{amount}}",
+  "this expense": "αυτό το έξοδο",
+  'Remove "{{description}}"?': 'Αφαίρεση "{{description}}";',
+  'Removed "{{description}}"': 'Αφαιρέθηκε "{{description}}"',
+  "Loading trip…": "Φόρτωση ταξιδιού…",
+  "No photos yet.": "Καμία φωτογραφία ακόμα.",
+  "Trip photo": "Φωτογραφία ταξιδιού",
+  "Delete": "Διαγραφή",
+  "Locking…": "Κλείδωμα…",
+  "Photos locked": "Οι φωτογραφίες κλειδώθηκαν",
+  "Save this PIN: {{pin}}": "Αποθήκευσε αυτό το PIN: {{pin}}",
+  "Photos locked. PIN copied.": "Οι φωτογραφίες κλειδώθηκαν. Το PIN αντιγράφηκε.",
+  "Photos locked. PIN: {{pin}}": "Οι φωτογραφίες κλειδώθηκαν. PIN: {{pin}}",
+  "Deleting…": "Διαγραφή…",
+  "Photo deleted": "Η φωτογραφία διαγράφηκε",
+  "Photo {{index}} of {{total}} from {{trip}}": "Φωτογραφία {{index}} από {{total}} από {{trip}}",
+  "Removes this photo from the trip": "Αφαιρεί αυτή τη φωτογραφία από το ταξίδι",
+  "Could not upload photo": "Δεν ήταν δυνατή η προσθήκη φωτογραφίας",
+  "Could not load photos": "Δεν ήταν δυνατή η φόρτωση φωτογραφιών",
+  "Working…": "Επεξεργασία…",
+  "{{label}} copied": "{{label}} αντιγράφηκε",
+  "Copy this {{label}}": "Αντιγραφή αυτού του {{label}}",
+  "Link": "Σύνδεσμος",
+  "Payment copied": "Η πληρωμή αντιγράφηκε",
+  "Copy this payment": "Αντιγραφή αυτής της πληρωμής",
+  "Could not add person": "Δεν ήταν δυνατή η προσθήκη ατόμου",
+  "Could not save expense": "Δεν ήταν δυνατή η αποθήκευση εξόδου",
+  "Weights must be positive whole numbers": "Τα βάρη πρέπει να είναι θετικοί ακέραιοι αριθμοί",
+  "Could not remove expense": "Δεν ήταν δυνατή η αφαίρεση εξόδου",
+  "Close": "Κλείσιμο",
+};
+
+const dictionaries: Record<Language, Translations> = { en, el };
+
+let currentLanguage: Language = "en";
+
+export function setLanguage(language: Language): void {
+  currentLanguage = language;
+}
+
+export function getLanguage(): Language {
+  return currentLanguage;
+}
+
+export function getSupportedLanguages(): Language[] {
+  return ["en", "el"];
+}
+
+export function t(key: string, values: Record<string, string | number> = {}): string {
+  const template = dictionaries[currentLanguage]?.[key] ?? dictionaries.en[key] ?? key;
+  return template.replace(/{{\s*(\w+)\s*}}/g, (_, name) => String(values[name] ?? ""));
+}

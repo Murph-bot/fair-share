@@ -563,3 +563,9 @@ fieldset {
   justify-content: space-between;
   gap: 1rem;
 }
+
+.home-toggles {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

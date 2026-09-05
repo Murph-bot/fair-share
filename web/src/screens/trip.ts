@@ -1,6 +1,6 @@
 import { showQrDialog } from "../qr";
 import { fetchTrip, saveTrip, type PublicTrip } from "../api";
-import { getTheme, themeButtonHtml, toggleTheme } from "../theme";
+import { getTheme, languageButtonHtml, nextLanguage, themeButtonHtml, toggleTheme } from "../theme";
 import {
   addExpense,
   addPerson,
@@ -9,6 +9,7 @@ import {
   parseAmount,
   removeExpense,
   settle,
+  t,
   tripFileJson,
   updateExpense,
   type Expense,
@@ -55,29 +56,29 @@ async function persist(id: string, trip: PublicTrip, banner: HTMLElement): Promi
 
 function peopleList(trip: Trip): string {
   if (trip.people.length === 0) {
-    return `<p class="muted">Add the people who are sharing expenses.</p>`;
+    return `<p class="muted">${t("Add the people who are sharing expenses.")}</p>`;
   }
   return `<ul class="people">${trip.people.map((p) => `<li>${escapeHtml(p)}</li>`).join("")}</ul>`;
 }
 
 function expenseCards(trip: Trip): string {
   if (trip.expenses.length === 0) {
-    return `<p class="muted">No expenses yet. Add one above.</p>`;
+    return `<p class="muted">${t("No expenses yet. Add one above.")}</p>`;
   }
   return `<ul class="expenses">${trip.expenses
     .map((e) => {
       const weights =
         e.weights !== undefined
-          ? ` · weights ${escapeHtml(e.weights.join(":"))}`
+          ? ` · ${t("weights")} ${escapeHtml(e.weights.join(":"))}`
           : "";
           return `<li>
         <div>
           <strong>${escapeHtml(e.description)}</strong>
-          <span class="meta">${escapeHtml(e.payer)} paid ${centsToEuro(e.amount_cents)} · ${escapeHtml(e.participants.join(", "))}${weights}</span>
+          <span class="meta">${escapeHtml(e.payer)} ${t("paid")} ${centsToEuro(e.amount_cents)} · ${escapeHtml(e.participants.join(", "))}${weights}</span>
         </div>
         <div class="expense-actions">
-          <button type="button" class="text-btn" data-edit="${escapeHtml(e.id)}" aria-label="Edit ${escapeHtml(e.description)}">Edit</button>
-          <button type="button" class="text-btn" data-remove="${escapeHtml(e.id)}" aria-label="Remove ${escapeHtml(e.description)}">Remove</button>
+          <button type="button" class="text-btn" data-edit="${escapeHtml(e.id)}" aria-label="${t("Edit {{description}}", { description: escapeHtml(e.description) })}">${t("Edit")}</button>
+          <button type="button" class="text-btn" data-remove="${escapeHtml(e.id)}" aria-label="${t("Remove {{description}}", { description: escapeHtml(e.description) })}">${t("Remove")}</button>
         </div>
       </li>`;
     })
@@ -86,7 +87,7 @@ function expenseCards(trip: Trip): string {
 
 function balancesBlock(trip: Trip): string {
   if (trip.expenses.length === 0) {
-    return `<p class="muted">No expenses recorded. Add expenses to see who owes what.</p>`;
+    return `<p class="muted">${t("No expenses recorded. Add expenses to see who owes what.")}</p>`;
   }
   const balances = computeBalances(trip);
   const rows = Object.keys(balances)
@@ -97,22 +98,22 @@ function balancesBlock(trip: Trip): string {
       return `<li><span>${escapeHtml(person)}</span><span class="${amount < 0 ? "neg" : "pos"}">${sign}${centsToEuro(amount)}</span></li>`;
     })
     .join("");
-  return `<p class="muted explainer">Positive = owed to this person. Negative = this person owes money.</p><ul class="ledger">${rows}</ul>`;
+  return `<p class="muted explainer">${t("Positive = owed to this person. Negative = this person owes money.")}</p><ul class="ledger">${rows}</ul>`;
 }
 
 function settleBlock(trip: Trip): string {
   if (trip.expenses.length === 0) {
-    return `<p class="muted">Add expenses to see who pays whom.</p>`;
+    return `<p class="muted">${t("Add expenses to see who pays whom.")}</p>`;
   }
   const payments = settle(computeBalances(trip));
   if (payments.length === 0) {
-    return `<p class="muted">All settled — no payments needed.</p>`;
+    return `<p class="muted">${t("All settled — no payments needed.")}</p>`;
   }
   return `<ul class="payments">${payments
     .map(
       (p) =>
         `<li>${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${centsToEuro(p.amount_cents)}</strong>` +
-        `<button type="button" class="text-btn" data-share-from="${escapeHtml(p.frm)}" data-share-to="${escapeHtml(p.to)}" data-share-amount="${p.amount_cents}" aria-label="Copy payment: ${escapeHtml(p.frm)} pays ${escapeHtml(p.to)} ${centsToEuro(p.amount_cents)}">Share</button></li>`,
+        `<button type="button" class="text-btn" data-share-from="${escapeHtml(p.frm)}" data-share-to="${escapeHtml(p.to)}" data-share-amount="${p.amount_cents}" aria-label="${t("Copy payment: {{from}} pays {{to}} {{amount}}", { from: escapeHtml(p.frm), to: escapeHtml(p.to), amount: centsToEuro(p.amount_cents) })}">${t("Share")}</button></li>`,
     )
     .join("")}</ul>`;
 }
@@ -172,28 +173,28 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
   const desc = editing ? escapeHtml(editing.description) : "";
   const amount = editing ? escapeHtml(centsToFormAmount(editing.amount_cents)) : "";
   const unequal = editing?.weights !== undefined ? " checked" : "";
-  const submitLabel = editing ? "Save expense" : "Add expense";
+  const submitLabel = editing ? t("Save expense") : t("Add expense");
   const editingAttr = editing ? ` data-editing="${escapeHtml(editing.id)}"` : "";
   const cancel = editing
-    ? `<button type="button" class="text-btn" id="cancel-edit">Cancel</button>`
+    ? `<button type="button" class="text-btn" id="cancel-edit">${t("Cancel")}</button>`
     : "";
 
   return `
     <form id="expense-form" class="stack"${editingAttr}>
-      <label for="exp-desc">Description</label>
+      <label for="exp-desc">${t("Description")}</label>
       <input id="exp-desc" name="description" type="text" required maxlength="120" autocomplete="off" value="${desc}">
-      <label for="exp-amount">Amount (€)</label>
-      <input id="exp-amount" name="amount" type="text" inputmode="decimal" required placeholder="60 or 60.50" value="${amount}">
+      <label for="exp-amount">${t("Amount (€)")}</label>
+      <input id="exp-amount" name="amount" type="text" inputmode="decimal" required placeholder="${t("60 or 60.50")}" value="${amount}">
 
       <fieldset class="chip-fieldset">
-        <legend>Who paid</legend>
+        <legend>${t("Who paid")}</legend>
         <div class="chip-row" role="radiogroup" aria-required="true">
           ${payerChips}
         </div>
       </fieldset>
 
       <fieldset class="chip-fieldset">
-        <legend>Split between</legend>
+        <legend>${t("Split between")}</legend>
         <div class="chip-row">
           ${splitChips}
         </div>
@@ -202,9 +203,9 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
       <div class="weight-toggle">
         <label class="check">
           <input type="checkbox" id="unequal" name="unequal"${unequal}>
-          <span>Split by shares</span>
+          <span>${t("Split by shares")}</span>
         </label>
-        <p class="muted small" id="weight-help">If selected, give each person an integer share. Use 1 for an equal share, 2 for twice as much, etc.</p>
+        <p class="muted small" id="weight-help">${t("If selected, give each person an integer share. Use 1 for an equal share, 2 for twice as much, etc.")}</p>
       </div>
 
       <div class="weight-list" id="weight-list">
@@ -220,48 +221,49 @@ function expenseForm(trip: Trip, editing: Expense | null): string {
 
 function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: string | null = null): void {
   const hasPin = Boolean(loadPhotoPin(id));
-  const themeLabel = getTheme() === "dark" ? "Light" : "Dark";
+  const themeLabel = getTheme() === "dark" ? t("Light") : t("Dark");
   const editing = editingId ? trip.expenses.find((e) => e.id === editingId) ?? null : null;
   root.innerHTML = `
     <header class="topbar">
       <div>
-        <p class="kicker"><a href="/">Fair share</a></p>
+        <p class="kicker"><a href="/">${t("Fair Share")}</a></p>
         <h1>${escapeHtml(trip.name)}</h1>
       </div>
       <div class="topbar-actions">
-        <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"}>Copy PIN</button>
-        <button type="button" id="copy-link">Copy link</button>
-        <button type="button" id="show-qr">Show QR</button>
-        <button type="button" id="download-json">Download JSON</button>
+        <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"}>${t("Copy PIN")}</button>
+        <button type="button" id="copy-link">${t("Copy link")}</button>
+        <button type="button" id="show-qr">${t("Show QR")}</button>
+        <button type="button" id="download-json">${t("Download JSON")}</button>
+        ${languageButtonHtml()}
         ${themeButtonHtml(themeLabel)}
       </div>
     </header>
     <p id="banner" class="err" role="alert" aria-live="assertive" hidden></p>
     <main class="page trip">
       <section class="block">
-        <h2>People</h2>
+        <h2>${t("People")}</h2>
         ${peopleList(trip)}
         <form id="person-form" class="row">
-          <label class="sr" for="person-name">Name</label>
-          <input id="person-name" name="name" type="text" required maxlength="40" autocomplete="off" placeholder="Name">
-          <button type="submit">Add</button>
+          <label class="sr" for="person-name">${t("Name")}</label>
+          <input id="person-name" name="name" type="text" required maxlength="40" autocomplete="off" placeholder="${t("Name")}">
+          <button type="submit">${t("Add")}</button>
         </form>
         <p id="person-error" class="err" role="alert" aria-live="assertive" hidden></p>
       </section>
       <section class="block">
-        <h2>${editing ? "Edit expense" : "Add expense"}</h2>
+        <h2>${editing ? t("Edit expense") : t("Add expense")}</h2>
         ${expenseForm(trip, editing)}
       </section>
       <section class="block">
-        <h2>Expenses</h2>
+        <h2>${t("Expenses")}</h2>
         ${expenseCards(trip)}
       </section>
       <section class="block">
-        <h2>Balances</h2>
+        <h2>${t("Balances")}</h2>
         ${balancesBlock(trip)}
       </section>
       <section class="block">
-        <h2>Who pays whom</h2>
+        <h2>${t("Who pays whom")}</h2>
         ${settleBlock(trip)}
       </section>
       ${momentsSection()}
@@ -282,14 +284,14 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     }
     try {
       await navigator.clipboard.writeText(value);
-      announce(`${label} copied`);
+      announce(t("{{label}} copied", { label }));
       const original = btn.textContent ?? label;
-      btn.textContent = `${label} copied`;
+      btn.textContent = t("{{label}} copied", { label });
       window.setTimeout(() => {
         btn.textContent = original;
       }, 2000);
     } catch {
-      window.prompt(`Copy this ${label.toLowerCase()}`, value);
+      window.prompt(t("Copy this {{label}}", { label: label.toLowerCase() }), value);
     }
   }
 
@@ -298,11 +300,11 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     if (!pin) {
       return;
     }
-    void copyWithFeedback("copy-pin", "PIN", pin);
+    void copyWithFeedback("copy-pin", t("PIN"), pin);
   });
 
   root.querySelector("#copy-link")?.addEventListener("click", () => {
-    void copyWithFeedback("copy-link", "Link", window.location.href);
+    void copyWithFeedback("copy-link", t("Link"), window.location.href);
   });
 
   root.querySelector("#show-qr")?.addEventListener("click", () => {
@@ -313,8 +315,14 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   themeToggle?.addEventListener("click", () => {
     const next = toggleTheme();
     if (themeToggle) {
-      themeToggle.textContent = next === "dark" ? "Light" : "Dark";
+      themeToggle.textContent = next === "dark" ? t("Light") : t("Dark");
     }
+  });
+
+  const languageToggle = root.querySelector("#language-toggle") as HTMLButtonElement | null;
+  languageToggle?.addEventListener("click", () => {
+    nextLanguage();
+    window.location.reload();
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-share-from]").forEach((button) => {
@@ -322,12 +330,12 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       const from = button.dataset.shareFrom ?? "";
       const to = button.dataset.shareTo ?? "";
       const amountCents = Number(button.dataset.shareAmount ?? "0");
-      const message = `${from} pays ${to} ${centsToEuro(amountCents)}`;
+      const message = t("{{from}} pays {{to}} {{amount}}", { from, to, amount: centsToEuro(amountCents) });
       try {
         await navigator.clipboard.writeText(message);
-        announce("Payment copied");
+        announce(t("Payment copied"));
       } catch {
-        window.prompt("Copy this payment", message);
+        window.prompt(t("Copy this payment"), message);
       }
     });
   });
@@ -351,7 +359,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       const before = trip.people.length;
       const next = addPerson(trip, input.value);
       if (next.people.length === before) {
-        setBanner(personError, "That person is already on the trip");
+        setBanner(personError, t("That person is already on the trip"));
         return;
       }
       setBusy(root, true);
@@ -361,7 +369,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       if (!saveLock) {
         setBusy(root, false);
       }
-      setBanner(personError, err instanceof Error ? err.message : "Could not add person");
+      setBanner(personError, err instanceof Error ? err.message : t("Could not add person"));
     }
   });
 
@@ -379,7 +387,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
           const raw = String(data.get(`weight-${person}`) ?? "1");
           const value = Number.parseInt(raw, 10);
           if (!Number.isInteger(value) || value <= 0) {
-            throw new Error("Weights must be positive whole numbers");
+            throw new Error(t("Weights must be positive whole numbers"));
           }
           return value;
         });
@@ -404,7 +412,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         setBusy(root, false);
       }
       if (expenseError) {
-        setBanner(expenseError, err instanceof Error ? err.message : "Could not save expense");
+        setBanner(expenseError, err instanceof Error ? err.message : t("Could not save expense"));
       }
     }
   });
@@ -424,27 +432,27 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   });
 
   root.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((button) => {
-    const description = button.getAttribute("aria-label")?.replace(/^Remove /, "") ?? "this expense";
+    const description = button.getAttribute("aria-label")?.replace(new RegExp(`^${t("Remove")} `), "") ?? t("this expense");
     button.addEventListener("click", async () => {
       const expenseId = button.dataset.remove;
       if (!expenseId) {
         return;
       }
-      if (!window.confirm(`Remove "${description}"?`)) {
+      if (!window.confirm(t('Remove "{{description}}"?', { description }))) {
         return;
       }
       try {
         const next = removeExpense(trip, expenseId);
         setBusy(root, true);
         const saved = await persist(id, next, banner);
-        announce(`Removed "${description}"`);
+        announce(t('Removed "{{description}}"', { description }));
         const stillEditing = editingId && expenseId !== editingId ? editingId : null;
         paint(root, id, saved, stillEditing);
       } catch (err) {
         if (!saveLock) {
           setBusy(root, false);
         }
-        setBanner(banner, err instanceof Error ? err.message : "Could not remove expense");
+        setBanner(banner, err instanceof Error ? err.message : t("Could not remove expense"));
       }
     });
   });
@@ -453,17 +461,17 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
 }
 
 export async function renderTrip(root: HTMLElement, id: string): Promise<void> {
-  root.innerHTML = `<main class="page"><p class="muted">Loading trip…</p></main>`;
+  root.innerHTML = `<main class="page"><p class="muted">${t("Loading trip…")}</p></main>`;
   try {
     const trip = await fetchTrip(id);
     rememberRecent(id, trip.name);
     paint(root, id, trip);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Trip not found";
+    const message = err instanceof Error ? err.message : t("Trip not found");
     root.innerHTML = `
       <main class="page">
         <p class="err">${escapeHtml(message)}</p>
-        <p><a href="/">Back to home</a></p>
+        <p><a href="/">${t("Back to home")}</a></p>
       </main>
     `;
   }

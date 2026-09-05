@@ -23,6 +23,7 @@ import {
   parseAmount,
   removeExpense,
   settle,
+  t,
   tripFileJson,
   updateExpense,
   type Expense,
@@ -33,6 +34,7 @@ import { loadPhotoPin } from "../../api/photoSession";
 import { apiBaseUrl } from "../../api/client";
 import { Moments } from "../../components/moments";
 import { useTrip } from "../../hooks/useTrip";
+import { useTranslation } from "../../i18n";
 import { Colors, type ColorTheme } from "../../constants/theme";
 
 function createExpenseId(): string {
@@ -164,6 +166,7 @@ function ErrorBanner({ message, styles }: { message: string | null; styles: Styl
 }
 
 export default function TripScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ id?: string }>();
   const tripId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
   const { trip, loading, saving, error, reload, mutate } = useTrip(tripId);
@@ -206,7 +209,7 @@ export default function TripScreen() {
       return;
     }
     try {
-      await Share.share({ message: `Join the trip on Fair Share: ${tripUrl}` });
+      await Share.share({ message: t("Join the trip on Fair Share: {{url}}", { url: tripUrl }) });
     } catch {
       // User cancelled or share failed.
     }
@@ -214,11 +217,11 @@ export default function TripScreen() {
 
   const handleSharePin = async () => {
     if (!photoPin) {
-      Alert.alert("No PIN", "Photos on this trip are not locked.");
+      Alert.alert(t("No PIN"), t("Photos on this trip are not locked."));
       return;
     }
     try {
-      await Share.share({ message: `Photos PIN for the trip: ${photoPin}` });
+      await Share.share({ message: t("Photos PIN for the trip: {{pin}}", { pin: photoPin }) });
     } catch {
       // User cancelled or share failed.
     }
@@ -276,7 +279,7 @@ export default function TripScreen() {
 
     const name = personName.trim();
     if (!name) {
-      setPersonError("Enter a person name");
+      setPersonError(t("Enter a person name"));
       return;
     }
 
@@ -292,10 +295,10 @@ export default function TripScreen() {
       return;
     }
 
-    Alert.alert("Remove expense?", description, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("Remove expense?"), description, [
+      { text: t("Cancel"), style: "cancel" },
       {
-        text: "Remove",
+        text: t("Remove"),
         style: "destructive",
         onPress: () => {
           void mutate((current) => removeExpense(current, expenseId));
@@ -334,18 +337,18 @@ export default function TripScreen() {
 
     const description = expenseDraft.description.trim();
     if (!description) {
-      setFormError("Enter an expense description");
+      setFormError(t("Enter an expense description"));
       return;
     }
 
     if (!expenseDraft.payer) {
-      setFormError("Choose who paid");
+      setFormError(t("Choose who paid"));
       return;
     }
 
     const participants = trip.people.filter((person) => expenseDraft.participants[person]);
     if (participants.length === 0) {
-      setFormError("Select at least one participant");
+      setFormError(t("Select at least one participant"));
       return;
     }
 
@@ -353,7 +356,7 @@ export default function TripScreen() {
     try {
       amountCents = parseAmount(expenseDraft.amount);
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "Invalid amount");
+      setFormError(caught instanceof Error ? caught.message : t("Invalid amount"));
       return;
     }
 
@@ -378,7 +381,7 @@ export default function TripScreen() {
           : {}),
       };
     } catch (caught) {
-      setFormError(caught instanceof Error ? caught.message : "Invalid weights");
+      setFormError(caught instanceof Error ? caught.message : t("Invalid weights"));
       return;
     }
 
@@ -440,7 +443,7 @@ export default function TripScreen() {
           <Text style={styles.title}>Trip not found</Text>
           <ErrorBanner styles={styles} message={error} />
           <View style={styles.rowGap}>
-            <StepButton styles={styles} label="Retry" onPress={() => void reload()} />
+            <StepButton styles={styles} label={t("Retry")} onPress={() => void reload()} />
             <Link href="/" asChild>
               <Pressable style={styles.secondaryButton} accessibilityRole="button">
                 <Text style={styles.secondaryButtonText}>Open another trip</Text>
@@ -460,27 +463,27 @@ export default function TripScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
             <Text style={styles.title}>{trip.name}</Text>
-            <Text style={styles.mutedText}>Trip ID {tripId}</Text>
+            <Text style={styles.mutedText}>{t("Trip ID")} {tripId}</Text>
           </View>
           <Link href="/" asChild>
-            <Pressable style={styles.secondaryButton} accessibilityRole="button" accessibilityLabel="Change trip">
-              <Text style={styles.secondaryButtonText}>Change trip</Text>
+            <Pressable style={styles.secondaryButton} accessibilityRole="button" accessibilityLabel={t("Change trip")}>
+              <Text style={styles.secondaryButtonText}>{t("Change trip")}</Text>
             </Pressable>
           </Link>
         </View>
 
         <View style={styles.actionRow}>
-          <Pressable style={styles.secondaryButton} onPress={() => void handleShareTrip()} accessibilityRole="button" accessibilityLabel="Share trip link">
-            <Text style={styles.secondaryButtonText}>Share trip</Text>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleShareTrip()} accessibilityRole="button" accessibilityLabel={t("Share trip link")}>
+            <Text style={styles.secondaryButtonText}>{t("Share trip")}</Text>
           </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={() => void handleSharePin()} accessibilityRole="button" accessibilityLabel="Share photos PIN">
-            <Text style={styles.secondaryButtonText}>Share PIN</Text>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleSharePin()} accessibilityRole="button" accessibilityLabel={t("Share photos PIN")}>
+            <Text style={styles.secondaryButtonText}>{t("Share PIN")}</Text>
           </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={() => setQrVisible(true)} accessibilityRole="button" accessibilityLabel="Show QR code for trip link">
-            <Text style={styles.secondaryButtonText}>Show QR</Text>
+          <Pressable style={styles.secondaryButton} onPress={() => setQrVisible(true)} accessibilityRole="button" accessibilityLabel={t("Show QR code for trip link")}>
+            <Text style={styles.secondaryButtonText}>{t("Show QR")}</Text>
           </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={() => void handleExportJson()} accessibilityRole="button" accessibilityLabel="Export trip JSON">
-            <Text style={styles.secondaryButtonText}>Export JSON</Text>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleExportJson()} accessibilityRole="button" accessibilityLabel={t("Export trip JSON")}>
+            <Text style={styles.secondaryButtonText}>{t("Export JSON")}</Text>
           </Pressable>
         </View>
 
@@ -488,7 +491,7 @@ export default function TripScreen() {
         <ErrorBanner styles={styles} message={personError} />
         <ErrorBanner styles={styles} message={formError} />
 
-        <Section styles={styles} title="People">
+        <Section styles={styles} title={t("People")}>
           <View style={styles.rowWrap}>
             {trip.people.map((person) => (
               <View key={person} style={styles.personTag}>
@@ -500,37 +503,37 @@ export default function TripScreen() {
           <View style={styles.fieldRow}>
             <View style={styles.flexGrow}>
               <Field styles={styles}
-                label="Add person"
+                label={t("Add person")}
                 value={personName}
                 onChangeText={(value) => {
                   setPersonName(value);
                   setPersonError(null);
                 }}
-                placeholder="Name"
+                placeholder={t("Name")}
               />
             </View>
-            <StepButton styles={styles} label="Add" onPress={() => void handleAddPerson()} />
+            <StepButton styles={styles} label={t("Add")} onPress={() => void handleAddPerson()} />
           </View>
         </Section>
 
-        <Section styles={styles} title={editingExpenseId ? "Edit expense" : "Add expense"}>
+        <Section styles={styles} title={editingExpenseId ? t("Edit expense") : t("Add expense")}>
           <Field styles={styles}
-            label="Description"
+            label={t("Description")}
             value={draft.description}
             onChangeText={(value) =>
               setExpenseDraft((current) => (current ? { ...current, description: value } : current))
             }
-            placeholder="Dinner"
+            placeholder={t("Dinner")}
           />
           <Field styles={styles}
-            label="Amount"
+            label={t("Amount")}
             value={draft.amount}
             onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, amount: value } : current))}
-            placeholder="40.00"
+            placeholder={t("40.00")}
             keyboardType="decimal-pad"
           />
 
-          <Text style={styles.fieldLabel}>Who paid</Text>
+          <Text style={styles.fieldLabel}>{t("Who paid")}</Text>
           <View style={styles.rowWrap}>
             {trip.people.map((person) => (
               <ChipButton
@@ -545,7 +548,7 @@ export default function TripScreen() {
             ))}
           </View>
 
-          <Text style={styles.fieldLabel}>Split with</Text>
+          <Text style={styles.fieldLabel}>{t("Split with")}</Text>
           <View style={styles.rowWrap}>
             {trip.people.map((person) => (
               <ChipButton
@@ -559,7 +562,7 @@ export default function TripScreen() {
           </View>
 
           <ChipButton
-            label={draft.weighted ? "Weighted split" : "Equal split"}
+            label={draft.weighted ? t("Weighted split") : t("Equal split")}
             selected={draft.weighted}
             onPress={() =>
               setExpenseDraft((current) =>
@@ -588,31 +591,31 @@ export default function TripScreen() {
           ) : null}
 
           <View style={styles.rowGap}>
-            <StepButton styles={styles} label={saving ? "Saving…" : editingExpenseId ? "Save changes" : "Add expense"} onPress={() => void handleSaveExpense()} />
+            <StepButton styles={styles} label={saving ? t("Saving…") : editingExpenseId ? t("Save changes") : t("Add expense")} onPress={() => void handleSaveExpense()} />
             {editingExpenseId ? (
               <Pressable style={styles.secondaryButton} onPress={handleCancelEdit} accessibilityRole="button">
-                <Text style={styles.secondaryButtonText}>Cancel edit</Text>
+                <Text style={styles.secondaryButtonText}>{t("Cancel edit")}</Text>
               </Pressable>
             ) : null}
           </View>
         </Section>
 
-        <Section styles={styles} title="Expenses">
-          {trip.expenses.length === 0 ? <Text style={styles.mutedText}>No expenses yet. Add one above.</Text> : null}
+        <Section styles={styles} title={t("Expenses")}>
+          {trip.expenses.length === 0 ? <Text style={styles.mutedText}>{t("No expenses yet. Add one above.")}</Text> : null}
           <View style={styles.listGap}>
             {trip.expenses.map((expense) => (
               <View key={expense.id} style={styles.card}>
                 <Text style={styles.cardTitle}>{expense.description}</Text>
-                <Text style={styles.mutedText}>{expense.payer} paid {centsToEuro(expense.amount_cents)}</Text>
+                <Text style={styles.mutedText}>{expense.payer} {t("paid")} {centsToEuro(expense.amount_cents)}</Text>
                 <Text style={styles.cardBody}>{formatParticipants(expense)}</Text>
                 <View style={styles.rowGap}>
-                  <StepButton styles={styles} label="Edit" onPress={() => handleEditExpense(expense)} />
+                  <StepButton styles={styles} label={t("Edit")} onPress={() => handleEditExpense(expense)} />
                   <Pressable
                     style={styles.dangerButton}
                     onPress={() => handleRemoveExpense(expense.id, expense.description)}
                     accessibilityRole="button"
                   >
-                    <Text style={styles.dangerButtonText}>Remove</Text>
+                    <Text style={styles.dangerButtonText}>{t("Remove")}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -620,9 +623,9 @@ export default function TripScreen() {
           </View>
         </Section>
 
-        <Section styles={styles} title="Balances">
+        <Section styles={styles} title={t("Balances")}>
           {trip.expenses.length === 0 ? null : (
-            <Text style={styles.explainer}>Positive = owed to this person. Negative = this person owes money.</Text>
+            <Text style={styles.explainer}>{t("Positive = owed to this person. Negative = this person owes money.")}</Text>
           )}
           <View style={styles.listGap}>
             {Object.entries(balances ?? {})
@@ -638,8 +641,8 @@ export default function TripScreen() {
           </View>
         </Section>
 
-        <Section styles={styles} title="Who pays whom">
-          {payments.length === 0 ? <Text style={styles.mutedText}>All settled — no payments needed.</Text> : null}
+        <Section styles={styles} title={t("Who pays whom")}>
+          {payments.length === 0 ? <Text style={styles.mutedText}>{t("All settled — no payments needed.")}</Text> : null}
           <View style={styles.listGap}>
             {payments.map((payment) => (
               <View key={`${payment.frm}-${payment.to}-${payment.amount_cents}`} style={styles.balanceRow}>
@@ -672,7 +675,7 @@ export default function TripScreen() {
                 backgroundColor={colors.background}
               />
             ) : null}
-            <Text style={styles.mutedText}>Scan to open this trip.</Text>
+            <Text style={styles.mutedText}>{t("Scan to open this trip.")}</Text>
             <Pressable style={styles.stepButton} onPress={() => setQrVisible(false)} accessibilityRole="button">
               <Text style={styles.stepButtonText}>Close</Text>
             </Pressable>

@@ -1,3 +1,5 @@
+import { getLanguage, getSupportedLanguages, saveLanguage, type Language } from "./i18n";
+
 const THEME_KEY = "fairshare-theme";
 
 type Theme = "light" | "dark";
@@ -32,4 +34,19 @@ export function toggleTheme(): Theme {
 export function themeButtonHtml(label?: string): string {
   const text = label ?? "Mode";
   return `<button type="button" id="theme-toggle" class="text-btn" aria-label="Toggle dark mode">${text}</button>`;
+}
+
+export function nextLanguage(): Language {
+  const languages = getSupportedLanguages();
+  const current = getLanguage();
+  const index = languages.indexOf(current);
+  const next = languages[(index + 1) % languages.length];
+  saveLanguage(next);
+  return next;
+}
+
+export function languageButtonHtml(): string {
+  const current = getLanguage();
+  const next = getSupportedLanguages()[(getSupportedLanguages().indexOf(current) + 1) % getSupportedLanguages().length];
+  return `<button type="button" id="language-toggle" class="text-btn" aria-label="Switch language">${current.toUpperCase()} → ${next.toUpperCase()}</button>`;
 }

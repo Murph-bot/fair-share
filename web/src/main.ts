@@ -1,9 +1,11 @@
 import { TRIP_ID_RE } from "@fairshare/domain";
 import { initTheme } from "./theme";
+import { initLanguage } from "./i18n";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
 
 initTheme();
+initLanguage();
 
 const app = document.getElementById("app");
 if (!app) {

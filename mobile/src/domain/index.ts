@@ -17,3 +17,4 @@ export {
   type Expense,
   type NewExpenseInput,
 } from "../../../packages/domain/src/trip";
+export { getLanguage, getSupportedLanguages, setLanguage, t, type Language } from "../../../packages/domain/src/i18n";

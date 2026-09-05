@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { t } from "@fairshare/domain";
 
 function qrColor(): { dark: string; light: string } {
   const rootStyle = getComputedStyle(document.documentElement);
@@ -18,14 +19,14 @@ export async function showQrDialog(url: string): Promise<void> {
   dialog.className = "qr-dialog";
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-label", "Trip QR code");
+  dialog.setAttribute("aria-label", t("Trip QR code"));
   dialog.innerHTML = `
     <form method="dialog" class="qr-close-form">
-      <button type="submit" class="secondary">Close</button>
+      <button type="submit" class="secondary">${t("Close")}</button>
     </form>
     <div class="qr-body">
-      <img src="${dataUrl}" alt="QR code for the trip link" width="240" height="240">
-      <p class="muted small">Scan to open this trip.</p>
+      <img src="${dataUrl}" alt="${t("QR code for the trip link")}" width="240" height="240">
+      <p class="muted small">${t("Scan to open this trip.")}</p>
     </div>
   `;
 

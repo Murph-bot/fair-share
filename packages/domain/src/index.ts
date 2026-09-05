@@ -54,3 +54,4 @@ export {
   cloudinaryFolder,
   cloudinaryPublicId,
 } from "./cloudinary";
+export { getLanguage, getSupportedLanguages, setLanguage, t, type Language } from "./i18n";

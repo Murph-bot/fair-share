@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, useColorScheme } from "react-native";
 
 import { Colors, type ColorTheme } from "../constants/theme";
 import { resolveDonateUrl } from "../utils/donate";
+import { t } from "../domain";
 
 export function DonateButton() {
   const scheme = useColorScheme();
@@ -22,9 +23,9 @@ export function DonateButton() {
       style={styles.button}
       onPress={() => void WebBrowser.openBrowserAsync(url)}
       accessibilityRole="link"
-      accessibilityLabel="Support Fair Share"
+      accessibilityLabel={t("Support Fair Share")}
     >
-      <Text style={styles.text}>Support Fair Share</Text>
+      <Text style={styles.text}>{t("Support Fair Share")}</Text>
     </Pressable>
   );
 }
