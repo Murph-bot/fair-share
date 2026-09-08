@@ -100,7 +100,6 @@ const el: Translations = {
   "{{count}} expenses": "{{count}} έξοδα",
   "Overview": "Σύνοψη",
   "Largest expense": "Μεγαλύτερο έξοδο",
-  "Who paid": "Ποιος πλήρωσε",
   "Add expenses to see the overview.": "Πρόσθεσε έξοδα για να δεις τη σύνοψη.",
   "No accounts, no ads, no tracking. Your data lives on the trip link, and backups stay on this device.": "Χωρίς λογαριασμούς, διαφημίσεις ή παρακολούθηση. Τα δεδομένα σου ζουν στον σύνδεσμο του ταξιδιού και τα αντίγραφα μένουν σε αυτή τη συσκευή.",
   "Archive": "Αρχειοθέτηση",
