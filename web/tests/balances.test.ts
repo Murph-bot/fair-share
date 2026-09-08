@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeBalances } from "@fairshare/domain/balances";
+import { computeBalances, computeStats } from "@fairshare/domain/balances";
 import { ValidationError } from "@fairshare/domain/errors";
 import type { Expense, Trip } from "@fairshare/domain/trip";
 import { parseTrip } from "@fairshare/domain/trip";
@@ -137,6 +137,32 @@ describe("computeBalances", () => {
       },
     ]);
     expect(Object.values(computeBalances(trip)).reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it("computes trip stats", () => {
+    const trip = tripWith([
+      {
+        id: "1",
+        description: "Dinner",
+        payer: "Alice",
+        amount_cents: 9000,
+        participants: ["Alice", "Bob"],
+      },
+      {
+        id: "2",
+        description: "Taxi",
+        payer: "Bob",
+        amount_cents: 1000,
+        participants: ["Alice", "Bob"],
+        tax_cents: 100,
+      },
+    ]);
+    const stats = computeStats(trip);
+    expect(stats.totalCents).toBe(10100);
+    expect(stats.expenseCount).toBe(2);
+    expect(stats.largestExpense?.description).toBe("Dinner");
+    expect(stats.paidBy.Alice).toBe(9000);
+    expect(stats.paidBy.Bob).toBe(1100);
   });
 
   it("rejects mismatched weights on parse", () => {

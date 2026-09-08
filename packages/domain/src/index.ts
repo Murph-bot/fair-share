@@ -7,18 +7,23 @@ export {
   RateLimitError,
   ConfigError,
 } from "./errors";
-export { parseAmount, centsToEuro } from "./money";
+export { parseAmount, centsToEuro, centsToCurrency, currencySymbol } from "./money";
 export { equalSplit, weightedSplit } from "./splitter";
-export { computeBalances } from "./balances";
+export { computeBalances, computeStats, type TripStats } from "./balances";
 export { settle, type Payment } from "./settlement";
 export {
   SCHEMA_VERSION,
   TRIP_ID_RE,
+  DEFAULT_CURRENCY,
   newTripId,
   createTrip,
   archiveTrip,
   unarchiveTrip,
   createExampleTrip,
+  createTripFromTemplate,
+  findTripTemplate,
+  TRIP_TEMPLATES,
+  type TripTemplate,
   addPerson,
   renamePerson,
   movePerson,
@@ -28,10 +33,14 @@ export {
   recordPayment,
   unrecordPayment,
   isPaymentCompleted,
+  paymentStatus,
   parseTrip,
   tripFileJson,
+  backupJson,
+  parseBackup,
   findCanonical,
   validateExpense,
+  effectiveAmountCents,
   type Trip,
   type Expense,
   type NewExpenseInput,

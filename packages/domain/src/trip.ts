@@ -4,6 +4,8 @@ import type { Payment } from "./settlement";
 export const SCHEMA_VERSION = 1;
 export const TRIP_ID_RE = /^[a-f0-9]{32}$/;
 
+export const DEFAULT_CURRENCY = "EUR";
+
 export type Expense = {
   id: string;
   description: string;
@@ -14,6 +16,10 @@ export type Expense = {
   date?: string;
   category?: string;
   note?: string;
+  currency?: string;
+  exchange_rate?: string;
+  tax_cents?: number;
+  tip_cents?: number;
 };
 
 export type Trip = {
@@ -23,6 +29,7 @@ export type Trip = {
   expenses: Expense[];
   completedPayments?: Payment[];
   archivedAt?: string;
+  currency?: string;
 };
 
 export function newTripId(): string {
@@ -94,12 +101,49 @@ export function validateExpense(expense: Expense, people: string[]): void {
   if (expense.category !== undefined && expense.category.includes(",")) {
     throw new ValidationError("Category cannot contain commas");
   }
+
+  if (expense.currency !== undefined && !/^[A-Z]{3}$/.test(expense.currency)) {
+    throw new ValidationError(`Invalid currency code, expected 3 uppercase letters: ${expense.currency}`);
+  }
+
+  if (expense.exchange_rate !== undefined) {
+    const rate = Number(expense.exchange_rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new ValidationError(`Exchange rate must be a positive number, got ${expense.exchange_rate}`);
+    }
+  }
+
+  for (const [field, value] of [
+    ["tax_cents", expense.tax_cents],
+    ["tip_cents", expense.tip_cents],
+  ] as const) {
+    if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+      throw new ValidationError(`${field} must be a non-negative integer, got ${value}`);
+    }
+  }
 }
 
-export function createTrip(name: string): Trip {
+/**
+ * Total expense value expressed in the trip's currency (cents).
+ * Tax and tip are added to the amount, then the exchange rate converts
+ * the expense currency into the trip currency.
+ */
+export function effectiveAmountCents(expense: Expense): number {
+  const total = expense.amount_cents + (expense.tax_cents ?? 0) + (expense.tip_cents ?? 0);
+  if (expense.exchange_rate === undefined) {
+    return total;
+  }
+  return Math.round(total * Number(expense.exchange_rate));
+}
+
+export function createTrip(name: string, currency: string = DEFAULT_CURRENCY): Trip {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new ValidationError("Trip name cannot be empty");
+  }
+  const normalizedCurrency = currency.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(normalizedCurrency)) {
+    throw new ValidationError(`Invalid currency code: ${currency}`);
   }
   return {
     schema_version: SCHEMA_VERSION,
@@ -107,6 +151,7 @@ export function createTrip(name: string): Trip {
     people: [],
     expenses: [],
     completedPayments: [],
+    currency: normalizedCurrency,
   };
 }
 
@@ -170,6 +215,10 @@ export type NewExpenseInput = {
   date?: string;
   category?: string;
   note?: string;
+  currency?: string;
+  exchange_rate?: string;
+  tax_cents?: number;
+  tip_cents?: number;
 };
 
 function buildExpense(trip: Trip, input: NewExpenseInput, id: string): Expense {
@@ -196,6 +245,10 @@ function buildExpense(trip: Trip, input: NewExpenseInput, id: string): Expense {
     date: input.date,
     category: input.category,
     note: input.note,
+    currency: input.currency,
+    exchange_rate: input.exchange_rate,
+    tax_cents: input.tax_cents,
+    tip_cents: input.tip_cents,
   };
   validateExpense(expense, trip.people);
   return expense;
@@ -304,6 +357,16 @@ export function parseTrip(data: unknown): Trip {
     const category = categoryRaw === undefined || categoryRaw === null ? undefined : String(categoryRaw);
     const noteRaw = item.note;
     const note = noteRaw === undefined || noteRaw === null ? undefined : String(noteRaw);
+    const currencyRaw = item.currency;
+    const currency =
+      currencyRaw === undefined || currencyRaw === null ? undefined : String(currencyRaw).toUpperCase();
+    const exchangeRateRaw = item.exchange_rate;
+    const exchangeRate =
+      exchangeRateRaw === undefined || exchangeRateRaw === null ? undefined : String(exchangeRateRaw);
+    const taxCentsRaw = item.tax_cents;
+    const taxCents = taxCentsRaw === undefined || taxCentsRaw === null ? undefined : Number(taxCentsRaw);
+    const tipCentsRaw = item.tip_cents;
+    const tipCents = tipCentsRaw === undefined || tipCentsRaw === null ? undefined : Number(tipCentsRaw);
 
     const expense: Expense = {
       id: item.id,
@@ -315,6 +378,10 @@ export function parseTrip(data: unknown): Trip {
       date,
       category,
       note,
+      currency,
+      exchange_rate: exchangeRate,
+      tax_cents: taxCents,
+      tip_cents: tipCents,
     };
     if (ids.has(expense.id)) {
       throw new ValidationError(`Duplicate expense id ${expense.id}`);
@@ -345,12 +412,22 @@ export function parseTrip(data: unknown): Trip {
           frm: item.frm,
           to: item.to,
           amount_cents: item.amount_cents,
+          ...(typeof item.paid_cents === "number" ? { paid_cents: item.paid_cents } : {}),
           completedAt: typeof item.completedAt === "string" ? item.completedAt : undefined,
         }))
     : undefined;
 
   const archivedAt =
     data.archivedAt === undefined || data.archivedAt === null ? undefined : String(data.archivedAt);
+
+  const currencyRaw = data.currency;
+  const currency =
+    currencyRaw === undefined || currencyRaw === null
+      ? DEFAULT_CURRENCY
+      : String(currencyRaw).toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new ValidationError(`Invalid currency code: ${currency}`);
+  }
 
   return {
     schema_version: SCHEMA_VERSION,
@@ -359,20 +436,36 @@ export function parseTrip(data: unknown): Trip {
     expenses,
     completedPayments,
     archivedAt,
+    currency,
   };
 }
 
 function paymentKey(payment: Payment): string {
-  return `${payment.frm}:${payment.to}:${payment.amount_cents}`;
+  return `${payment.frm}:${payment.to}`;
 }
 
-export function recordPayment(trip: Trip, payment: Payment): Trip {
+function paidForPair(trip: Trip, payment: Payment): number {
   const existing = trip.completedPayments ?? [];
-  if (existing.some((p) => paymentKey(p) === paymentKey(payment))) {
-    return trip;
+  return existing
+    .filter((p) => paymentKey(p) === paymentKey(payment))
+    .reduce((sum, p) => sum + (p.paid_cents ?? p.amount_cents), 0);
+}
+
+/**
+ * Record a payment (full or partial) from one person to another.
+ * Multiple records for the same pair accumulate towards the suggested amount.
+ */
+export function recordPayment(trip: Trip, payment: Payment, paidCents?: number): Trip {
+  const existing = trip.completedPayments ?? [];
+  const paid = paidCents === undefined ? payment.amount_cents : paidCents;
+  if (paid <= 0) {
+    throw new ValidationError("Paid amount must be positive");
   }
   const completed: Payment = {
-    ...payment,
+    frm: payment.frm,
+    to: payment.to,
+    amount_cents: payment.amount_cents,
+    ...(paid === payment.amount_cents ? {} : { paid_cents: paid }),
     completedAt: new Date().toISOString(),
   };
   return { ...trip, completedPayments: [...existing, completed] };
@@ -389,8 +482,23 @@ export function unrecordPayment(trip: Trip, payment: Payment): Trip {
 }
 
 export function isPaymentCompleted(trip: Trip, payment: Payment): boolean {
-  const existing = trip.completedPayments ?? [];
-  return existing.some((p) => paymentKey(p) === paymentKey(payment));
+  return paidForPair(trip, payment) >= payment.amount_cents;
+}
+
+export type PaymentStatus = {
+  paidCents: number;
+  remainingCents: number;
+  completed: boolean;
+};
+
+export function paymentStatus(trip: Trip, payment: Payment): PaymentStatus {
+  const paid = paidForPair(trip, payment);
+  const remaining = Math.max(0, payment.amount_cents - paid);
+  return {
+    paidCents: Math.min(paid, payment.amount_cents),
+    remainingCents: remaining,
+    completed: remaining === 0 && paid > 0,
+  };
 }
 
 export function archiveTrip(trip: Trip): Trip {
@@ -443,6 +551,65 @@ export function createExampleTrip(name: string): Trip {
   return trip;
 }
 
+export type TripTemplate = {
+  id: string;
+  name: string;
+  people: string[];
+};
+
+export const TRIP_TEMPLATES: TripTemplate[] = [
+  { id: "weekend", name: "Weekend trip", people: ["Alex", "Maria", "Nikos"] },
+  { id: "dinner", name: "Dinner", people: ["Alex", "Maria"] },
+  { id: "roadtrip", name: "Road trip", people: ["Alex", "Maria", "Nikos", "Elena"] },
+  { id: "holiday", name: "Holiday", people: ["Alex", "Maria", "Nikos", "Elena", "Dimitris"] },
+];
+
+export function findTripTemplate(id: string): TripTemplate | undefined {
+  return TRIP_TEMPLATES.find((template) => template.id === id);
+}
+
+export function createTripFromTemplate(templateId: string, name?: string): Trip {
+  const template = findTripTemplate(templateId);
+  if (!template) {
+    throw new ValidationError(`Unknown trip template: ${templateId}`);
+  }
+  let trip = createTrip(name?.trim() || template.name);
+  for (const person of template.people) {
+    trip = addPerson(trip, person);
+  }
+  return trip;
+}
+
+export type BackupFile = {
+  app: "fair-share";
+  version: 1;
+  exportedAt: string;
+  trips: Trip[];
+};
+
+export function backupJson(trips: Trip[]): string {
+  const backup: BackupFile = {
+    app: "fair-share",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    trips,
+  };
+  return `${JSON.stringify(backup, null, 2)}\n`;
+}
+
+export function parseBackup(data: unknown): Trip[] {
+  if (!isRecord(data)) {
+    throw new ValidationError("Backup must be an object");
+  }
+  if (data.app !== "fair-share" || data.version !== 1) {
+    throw new ValidationError("Unsupported backup file");
+  }
+  if (!Array.isArray(data.trips)) {
+    throw new ValidationError("Backup is missing the trips list");
+  }
+  return data.trips.map(parseTrip);
+}
+
 export function tripFileJson(trip: Trip): string {
   const payload: Trip = {
     schema_version: trip.schema_version,
@@ -451,6 +618,7 @@ export function tripFileJson(trip: Trip): string {
     expenses: trip.expenses,
     completedPayments: trip.completedPayments,
     archivedAt: trip.archivedAt,
+    currency: trip.currency,
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }

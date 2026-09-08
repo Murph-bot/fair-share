@@ -36,8 +36,46 @@ export function parseAmount(raw: string): number {
   return cents;
 }
 
-export function centsToEuro(cents: number): string {
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  EUR: "€",
+  USD: "$",
+  GBP: "£",
+  JPY: "¥",
+  CHF: "CHF",
+  CAD: "$",
+  AUD: "$",
+  SEK: "kr",
+  NOK: "kr",
+  DKK: "kr",
+  PLN: "zł",
+  CZK: "Kč",
+  TRY: "₺",
+  RUB: "₽",
+  CNY: "¥",
+  INR: "₹",
+  BRL: "R$",
+  MXN: "$",
+  ILS: "₪",
+  AED: "AED",
+  THB: "฿",
+  HKD: "$",
+  SGD: "$",
+  NZD: "$",
+  ZAR: "R",
+  KRW: "₩",
+};
+
+export function currencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+}
+
+export function centsToCurrency(cents: number, currency: string): string {
   const abs = Math.abs(cents);
-  const body = `€${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
+  const symbol = currencySymbol(currency);
+  const body = `${symbol}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`;
   return cents < 0 ? `-${body}` : body;
+}
+
+export function centsToEuro(cents: number): string {
+  return centsToCurrency(cents, "EUR");
 }

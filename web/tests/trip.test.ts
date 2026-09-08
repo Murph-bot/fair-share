@@ -4,8 +4,12 @@ import { computeBalances } from "@fairshare/domain/balances";
 import {
   addExpense,
   addPerson,
+  backupJson,
   createTrip,
+  createTripFromTemplate,
+  effectiveAmountCents,
   movePerson,
+  parseBackup,
   parseTrip,
   removeExpense,
   renamePerson,
@@ -275,6 +279,7 @@ describe("trip operations", () => {
       name: "Athens",
       people: ["Alice"],
       expenses: [],
+      currency: "EUR",
     });
   });
 
@@ -317,9 +322,122 @@ describe("trip operations", () => {
       name: "Athens",
       people: ["Alice", "Bob"],
       expenses: trip.expenses,
+      currency: "EUR",
     });
     expect("photos_locked" in raw).toBe(false);
     expect("pin_hash" in raw).toBe(false);
     expect(parseTrip(raw)).toEqual(trip);
+  });
+
+  it("adds tax and tip to the effective amount", () => {
+    let trip = addPerson(createTrip("T"), "Alice");
+    trip = addExpense(
+      trip,
+      {
+        description: "Dinner",
+        payer: "Alice",
+        amount_cents: 10000,
+        participants: ["Alice"],
+        tax_cents: 1200,
+        tip_cents: 800,
+      },
+      "id-1",
+    );
+    expect(trip.expenses[0].amount_cents).toBe(10000);
+    expect(effectiveAmountCents(trip.expenses[0])).toBe(12000);
+  });
+
+  it("converts foreign-currency expenses to the trip currency", () => {
+    let trip = addPerson(createTrip("T", "EUR"), "Alice");
+    trip = addExpense(
+      trip,
+      {
+        description: "Hotel",
+        payer: "Alice",
+        amount_cents: 10000,
+        participants: ["Alice"],
+        currency: "USD",
+        exchange_rate: "0.92",
+      },
+      "id-1",
+    );
+    expect(trip.expenses[0].currency).toBe("USD");
+    expect(effectiveAmountCents(trip.expenses[0])).toBe(9200);
+  });
+
+  it("rejects invalid currency and exchange rates", () => {
+    let trip = addPerson(createTrip("T"), "Alice");
+    expect(() =>
+      addExpense(
+        trip,
+        {
+          description: "X",
+          payer: "Alice",
+          amount_cents: 100,
+          participants: ["Alice"],
+          currency: "euro",
+        },
+        "id-1",
+      ),
+    ).toThrow(ValidationError);
+    expect(() =>
+      addExpense(
+        trip,
+        {
+          description: "X",
+          payer: "Alice",
+          amount_cents: 100,
+          participants: ["Alice"],
+          exchange_rate: "0",
+        },
+        "id-2",
+      ),
+    ).toThrow(ValidationError);
+  });
+
+  it("round-trips a backup bundle", () => {
+    const trip = parseTrip({
+      schema_version: 1,
+      name: "Athens",
+      people: ["Alice"],
+      expenses: [],
+    });
+    const parsed = parseBackup(JSON.parse(backupJson([trip])));
+    expect(parsed).toEqual([trip]);
+    expect(parsed[0].currency).toBe("EUR");
+  });
+
+  it("creates a trip from a template", () => {
+    const trip = createTripFromTemplate("weekend", "My weekend");
+    expect(trip.name).toBe("My weekend");
+    expect(trip.people).toEqual(["Alex", "Maria", "Nikos"]);
+    expect(trip.expenses).toEqual([]);
+  });
+
+  it("rejects unknown templates", () => {
+    expect(() => createTripFromTemplate("nope")).toThrow(/Unknown trip template/);
+  });
+
+  it("rejects an invalid backup bundle", () => {
+    expect(() => parseBackup({ app: "other", version: 1, trips: [] })).toThrow(
+      /Unsupported backup file/,
+    );
+  });
+
+  it("rejects negative tax cents", () => {
+    let trip = addPerson(createTrip("T"), "Alice");
+    expect(() =>
+      addExpense(
+        trip,
+        {
+          description: "X",
+          payer: "Alice",
+          amount_cents: 100,
+          participants: ["Alice"],
+          tax_cents: -5,
+        },
+        "id-1",
+      ),
+    ).toThrow(ValidationError);
   });
 });

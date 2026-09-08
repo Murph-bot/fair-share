@@ -2,6 +2,8 @@ export type Payment = {
   readonly frm: string;
   readonly to: string;
   readonly amount_cents: number;
+  /** How much of this payment was actually paid (partial payments allowed). */
+  paid_cents?: number;
   completedAt?: string;
 };
 

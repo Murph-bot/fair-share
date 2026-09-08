@@ -1,4 +1,4 @@
-import { createExampleTrip, type Trip } from "@fairshare/domain";
+import { createExampleTrip, createTripFromTemplate, type Trip } from "@fairshare/domain";
 import type { PhotoRecord } from "@fairshare/domain/photos";
 import { loadPhotoToken } from "./photo-session";
 
@@ -75,6 +75,21 @@ export async function createRemoteDemoTrip(name: string): Promise<{
   };
 }
 
+export async function createRemoteTemplateTrip(
+  templateId: string,
+  name?: string,
+): Promise<{ id: string; trip: PublicTrip; pin: string; photos_token: string }> {
+  const trip = createTripFromTemplate(templateId, name);
+  const created = await createRemoteTrip(trip.name);
+  const saved = await saveTrip(created.id, trip);
+  return {
+    id: created.id,
+    trip: saved,
+    pin: created.pin,
+    photos_token: created.photos_token,
+  };
+}
+
 export async function deleteRemoteTrip(id: string): Promise<void> {
   const res = await fetch(`/api/trips/${id}`, {
     method: "DELETE",
@@ -93,6 +108,7 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
       name: trip.name,
       people: trip.people,
       archivedAt: trip.archivedAt,
+      currency: trip.currency,
       expenses: trip.expenses.map((expense) => ({
         id: expense.id,
         description: expense.description,
@@ -103,6 +119,10 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
         ...(expense.date === undefined ? {} : { date: expense.date }),
         ...(expense.category === undefined ? {} : { category: expense.category }),
         ...(expense.note === undefined ? {} : { note: expense.note }),
+        ...(expense.currency === undefined ? {} : { currency: expense.currency }),
+        ...(expense.exchange_rate === undefined ? {} : { exchange_rate: expense.exchange_rate }),
+        ...(expense.tax_cents === undefined ? {} : { tax_cents: expense.tax_cents }),
+        ...(expense.tip_cents === undefined ? {} : { tip_cents: expense.tip_cents }),
       })),
       completedPayments: trip.completedPayments,
     }),

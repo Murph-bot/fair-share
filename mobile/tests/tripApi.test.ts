@@ -103,6 +103,7 @@ describe("tripApi", () => {
     expect(JSON.parse(String(options?.body))).toEqual({
       schema_version: 1,
       name: "CLI push check",
+      currency: "EUR",
       people: ["Alice", "Bob"],
       expenses: [
         {

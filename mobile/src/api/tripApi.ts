@@ -59,7 +59,10 @@ export async function fetchTrip(tripId: string): Promise<PublicTrip> {
   return asPublicTrip(await response.json());
 }
 
-type TripPayload = Pick<Trip, "schema_version" | "name" | "people" | "expenses" | "completedPayments" | "archivedAt">;
+type TripPayload = Pick<
+  Trip,
+  "schema_version" | "name" | "people" | "expenses" | "completedPayments" | "archivedAt" | "currency"
+>;
 
 function tripPayload(trip: Trip): TripPayload {
   return {
@@ -67,6 +70,7 @@ function tripPayload(trip: Trip): TripPayload {
     name: trip.name,
     people: [...trip.people],
     archivedAt: trip.archivedAt,
+    currency: trip.currency,
     expenses: trip.expenses.map((expense) => ({
       id: expense.id,
       description: expense.description,
@@ -77,6 +81,10 @@ function tripPayload(trip: Trip): TripPayload {
       ...(expense.date === undefined ? {} : { date: expense.date }),
       ...(expense.category === undefined ? {} : { category: expense.category }),
       ...(expense.note === undefined ? {} : { note: expense.note }),
+      ...(expense.currency === undefined ? {} : { currency: expense.currency }),
+      ...(expense.exchange_rate === undefined ? {} : { exchange_rate: expense.exchange_rate }),
+      ...(expense.tax_cents === undefined ? {} : { tax_cents: expense.tax_cents }),
+      ...(expense.tip_cents === undefined ? {} : { tip_cents: expense.tip_cents }),
     })),
     completedPayments: trip.completedPayments ? [...trip.completedPayments] : undefined,
   };

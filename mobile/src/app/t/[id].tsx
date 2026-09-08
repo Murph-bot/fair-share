@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -19,11 +20,13 @@ import {
   addExpense,
   addPerson,
   archiveTrip,
-  centsToEuro,
+  centsToCurrency,
   computeBalances,
-  isPaymentCompleted,
+  computeStats,
+  effectiveAmountCents,
   movePerson,
   parseAmount,
+  paymentStatus,
   recordPayment,
   removeExpense,
   renamePerson,
@@ -59,6 +62,10 @@ type ExpenseDraft = {
   date: string;
   category: string;
   note: string;
+  currency: string;
+  exchangeRate: string;
+  tax: string;
+  tip: string;
 };
 
 function makeExpenseDraft(trip: Trip, expense?: Expense): ExpenseDraft {
@@ -83,6 +90,10 @@ function makeExpenseDraft(trip: Trip, expense?: Expense): ExpenseDraft {
     date: expense?.date ?? "",
     category: expense?.category ?? "",
     note: expense?.note ?? "",
+    currency: expense?.currency ?? trip.currency ?? "EUR",
+    exchangeRate: expense?.exchange_rate ?? "",
+    tax: expense?.tax_cents ? (expense.tax_cents / 100).toFixed(2) : "",
+    tip: expense?.tip_cents ? (expense.tip_cents / 100).toFixed(2) : "",
   };
 }
 
@@ -227,6 +238,38 @@ export default function TripScreen() {
     };
   }, [tripId]);
 
+  const handleShareSummary = async () => {
+    if (!trip) {
+      return;
+    }
+    const currency = trip.currency ?? "EUR";
+    const total = trip.expenses.reduce((sum, expense) => sum + effectiveAmountCents(expense), 0);
+    const balances = computeBalances(trip);
+    const balanceLines = Object.keys(balances)
+      .sort((a, b) => a.localeCompare(b))
+      .map((person) => {
+        const amount = balances[person];
+        const sign = amount > 0 ? "+" : "";
+        return `${person}: ${sign}${centsToCurrency(amount, currency)}`;
+      })
+      .join("\n");
+    const text = [
+      `${trip.name} — ${t("Fair Share trip summary")}`,
+      `${t("Total")}: ${centsToCurrency(total, currency)}`,
+      `${t("Expenses")} (${trip.expenses.length}):`,
+      ...trip.expenses.map(
+        (expense) => `- ${expense.description}: ${centsToCurrency(effectiveAmountCents(expense), currency)}`,
+      ),
+      `${t("Balances")}:`,
+      balanceLines,
+    ].join("\n");
+    try {
+      await Share.share({ message: text, title: trip.name });
+    } catch {
+      /* user cancelled */
+    }
+  };
+
   const handleShareTrip = async () => {
     if (!tripUrl) {
       return;
@@ -288,6 +331,13 @@ export default function TripScreen() {
     return computeBalances(trip);
   }, [trip]);
 
+  const stats = useMemo(() => {
+    if (!trip) {
+      return null;
+    }
+    return computeStats(trip);
+  }, [trip]);
+
   const payments = useMemo(() => {
     if (!balances) {
       return [];
@@ -300,10 +350,11 @@ export default function TripScreen() {
       return [];
     }
     const query = expenseFilter.trim().toLowerCase();
+    const sorted = [...trip.expenses].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
     if (!query) {
-      return trip.expenses;
+      return sorted;
     }
-    return trip.expenses.filter((expense) => {
+    return sorted.filter((expense) => {
       const text = [expense.description, expense.payer, expense.category, expense.note, expense.participants.join(" ")]
         .filter((x): x is string => Boolean(x))
         .join(" ")
@@ -389,14 +440,60 @@ export default function TripScreen() {
     ]);
   };
 
-  const handleRecordPayment = async (payment: { frm: string; to: string; amount_cents: number }) => {
+  const handleRecordPayment = (payment: { frm: string; to: string; amount_cents: number }) => {
     if (!trip) {
       return;
     }
-    const next = isPaymentCompleted(trip, payment)
-      ? unrecordPayment(trip, payment)
-      : recordPayment(trip, payment);
-    await mutate(() => next);
+    const status = paymentStatus(trip, payment);
+    if (status.completed) {
+      void mutate(() => unrecordPayment(trip, payment));
+      return;
+    }
+    const markPaid = () => void mutate(() => recordPayment(trip, payment));
+    const partial = () => {
+      if (Platform.OS === "ios") {
+        Alert.prompt(
+          t("Partial payment"),
+          t("How much has {{from}} paid {{to}} so far?", { from: payment.frm, to: payment.to }),
+          (raw) => {
+            try {
+              const cents = parseAmount(raw);
+              if (cents > status.remainingCents) {
+                setFormError(t("Cannot pay more than what is owed"));
+                return;
+              }
+              void mutate(() =>
+                recordPayment(trip, payment, status.paidCents + cents),
+              );
+            } catch {
+              setFormError(t("Invalid amount"));
+            }
+          },
+          "plain-text",
+          (status.remainingCents / 100).toFixed(2),
+          "decimal-pad",
+        );
+      } else {
+        Alert.alert(
+          t("Partial payment"),
+          t("On Android, mark the full payment as paid or adjust it on the web."),
+        );
+      }
+    };
+    Alert.alert(
+      `${payment.frm} → ${payment.to}`,
+      status.paidCents > 0
+        ? t("Paid {{paid}} · {{remaining}} left", {
+            paid: centsToCurrency(status.paidCents, trip.currency ?? "EUR"),
+            remaining: centsToCurrency(status.remainingCents, trip.currency ?? "EUR"),
+          })
+        : t("How much has {{from}} paid {{to}}?", { from: payment.frm, to: payment.to }),
+      [
+        { text: t("Cancel"), style: "cancel" },
+        { text: t("Pay partial"), onPress: partial },
+        { text: t("Mark as paid"), onPress: markPaid },
+      ],
+    );
   };
 
   const handleRemoveExpense = (expenseId: string, description: string) => {
@@ -491,6 +588,18 @@ export default function TripScreen() {
         ...(expenseDraft.date ? { date: expenseDraft.date } : {}),
         ...(expenseDraft.category ? { category: expenseDraft.category } : {}),
         ...(expenseDraft.note ? { note: expenseDraft.note } : {}),
+        ...(expenseDraft.currency && expenseDraft.currency !== trip.currency
+          ? { currency: expenseDraft.currency }
+          : {}),
+        ...(expenseDraft.currency !== trip.currency && expenseDraft.exchangeRate.trim()
+          ? { exchange_rate: expenseDraft.exchangeRate.trim() }
+          : {}),
+        ...(expenseDraft.tax.trim() && Number(expenseDraft.tax) > 0
+          ? { tax_cents: parseAmount(expenseDraft.tax) }
+          : {}),
+        ...(expenseDraft.tip.trim() && Number(expenseDraft.tip) > 0
+          ? { tip_cents: parseAmount(expenseDraft.tip) }
+          : {}),
       };
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : t("Invalid weights"));
@@ -596,6 +705,9 @@ export default function TripScreen() {
           </Pressable>
           <Pressable style={styles.secondaryButton} onPress={() => void handleExportJson()} accessibilityRole="button" accessibilityLabel={t("Export trip JSON")}>
             <Text style={styles.secondaryButtonText}>{t("Export JSON")}</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => void handleShareSummary()} accessibilityRole="button" accessibilityLabel={t("Share summary")}>
+            <Text style={styles.secondaryButtonText}>{t("Share summary")}</Text>
           </Pressable>
         </View>
 
@@ -760,6 +872,59 @@ export default function TripScreen() {
             </View>
           ) : null}
 
+          <Text style={styles.fieldLabel}>{t("Currency")}</Text>
+          <View style={styles.rowWrap}>
+            {["EUR", "USD", "GBP", "CHF", "SEK", "TRY", "JPY"].map((code) => (
+              <ChipButton
+                key={code}
+                label={code}
+                selected={draft.currency === code}
+                onPress={() =>
+                  setExpenseDraft((current) => (current ? { ...current, currency: code } : current))
+                }
+                styles={styles}
+              />
+            ))}
+          </View>
+
+          {draft.currency !== (trip.currency ?? "EUR") ? (
+            <>
+              <Field
+                styles={styles}
+                label={t("Rate to {{currency}}", { currency: trip.currency ?? "EUR" })}
+                value={draft.exchangeRate}
+                onChangeText={(value) =>
+                  setExpenseDraft((current) => (current ? { ...current, exchangeRate: value } : current))
+                }
+                keyboardType="decimal-pad"
+                placeholder={t("e.g. 0.92")}
+              />
+              <Text style={styles.mutedText}>
+                {t("1 unit of this currency equals how much in {{currency}}?", { currency: trip.currency ?? "EUR" })}
+              </Text>
+            </>
+          ) : null}
+
+          <Field
+            styles={styles}
+            label={t("Tax")}
+            value={draft.tax}
+            onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, tax: value } : current))}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+          />
+
+          <Field
+            styles={styles}
+            label={t("Tip")}
+            value={draft.tip}
+            onChangeText={(value) => setExpenseDraft((current) => (current ? { ...current, tip: value } : current))}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+          />
+
+          <Text style={styles.mutedText}>{t("Tax and tip are added to the amount before splitting.")}</Text>
+
           <Field
             styles={styles}
             label={t("Date")}
@@ -813,7 +978,16 @@ export default function TripScreen() {
                 <Text style={styles.cardTitle}>{expense.description}</Text>
                 <Text style={styles.mutedText}>
                   {[
-                    `${expense.payer} ${t("paid")} ${centsToEuro(expense.amount_cents)}`,
+                    `${expense.payer} ${t("paid")} ${centsToCurrency(expense.amount_cents, expense.currency ?? trip.currency ?? "EUR")}`,
+                    ...(expense.currency && expense.currency !== (trip.currency ?? "EUR")
+                      ? [t("≈ {{amount}}", { amount: centsToCurrency(effectiveAmountCents(expense), trip.currency ?? "EUR") })]
+                      : []),
+                    ...(expense.tax_cents !== undefined
+                      ? [`${t("tax")} ${centsToCurrency(expense.tax_cents, expense.currency ?? trip.currency ?? "EUR")}`]
+                      : []),
+                    ...(expense.tip_cents !== undefined
+                      ? [`${t("tip")} ${centsToCurrency(expense.tip_cents, expense.currency ?? trip.currency ?? "EUR")}`]
+                      : []),
                     expense.date,
                     expense.category,
                     expense.note,
@@ -837,6 +1011,34 @@ export default function TripScreen() {
           </View>
         </Section>
 
+        <Section styles={styles} title={t("Overview")}>
+          {stats && trip.expenses.length > 0 ? (
+            <>
+              <Text style={styles.cardBody}>
+                {t("Total")}: {centsToCurrency(stats.totalCents, trip.currency ?? "EUR")} ·{" "}
+                {t("{{count}} expenses", { count: String(stats.expenseCount) })}
+              </Text>
+              {stats.largestExpense ? (
+                <Text style={styles.mutedText}>
+                  {t("Largest expense")}: {stats.largestExpense.description} (
+                  {centsToCurrency(effectiveAmountCents(stats.largestExpense), trip.currency ?? "EUR")})
+                </Text>
+              ) : null}
+              <Text style={styles.explainer}>{t("Who paid")}</Text>
+              {Object.entries(stats.paidBy)
+                .sort(([, a], [, b]) => b - a)
+                .map(([person, amount]) => (
+                  <View key={person} style={styles.balanceRow}>
+                    <Text style={styles.cardTitle}>{person}</Text>
+                    <Text style={styles.balanceValue}>{centsToCurrency(amount, trip.currency ?? "EUR")}</Text>
+                  </View>
+                ))}
+            </>
+          ) : (
+            <Text style={styles.mutedText}>{t("Add expenses to see the overview.")}</Text>
+          )}
+        </Section>
+
         <Section styles={styles} title={t("Balances")}>
           {trip.expenses.length === 0 ? null : (
             <Text style={styles.explainer}>{t("Positive = owed to this person. Negative = this person owes money.")}</Text>
@@ -848,7 +1050,7 @@ export default function TripScreen() {
                 <View key={person} style={styles.balanceRow}>
                   <Text style={styles.cardTitle}>{person}</Text>
                   <Text style={[styles.balanceValue, amount >= 0 ? styles.positive : styles.negative]}>
-                    {centsToEuro(amount)}
+                    {centsToCurrency(amount, trip.currency ?? "EUR")}
                   </Text>
                 </View>
               ))}
@@ -859,20 +1061,31 @@ export default function TripScreen() {
           {payments.length === 0 ? <Text style={styles.mutedText}>{t("All settled — no payments needed.")}</Text> : null}
           <View style={styles.listGap}>
             {payments.map((payment) => {
-              const completed = trip ? isPaymentCompleted(trip, payment) : false;
+              const status = trip ? paymentStatus(trip, payment) : null;
+              const completed = status?.completed ?? false;
               return (
                 <Pressable
                   key={`${payment.frm}-${payment.to}-${payment.amount_cents}`}
                   style={[styles.balanceRow, completed && styles.completedRow]}
-                  onPress={() => void handleRecordPayment(payment)}
+                  onPress={() => handleRecordPayment(payment)}
                   accessibilityRole="button"
                   accessibilityLabel={completed ? t("Unmark payment") : t("Mark as paid")}
                 >
-                  <Text style={[styles.cardBody, completed && styles.completedText]}>
-                    {payment.frm} → {payment.to}
-                  </Text>
+                  <View style={styles.rowGap}>
+                    <Text style={[styles.cardBody, completed && styles.completedText]}>
+                      {payment.frm} → {payment.to}
+                    </Text>
+                    {status && status.paidCents > 0 && !status.completed ? (
+                      <Text style={styles.mutedText}>
+                        {t("Paid {{paid}} · {{remaining}} left", {
+                          paid: centsToCurrency(status.paidCents, trip.currency ?? "EUR"),
+                          remaining: centsToCurrency(status.remainingCents, trip.currency ?? "EUR"),
+                        })}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text style={[styles.balanceValue, completed && styles.completedText]}>
-                    {centsToEuro(payment.amount_cents)}
+                    {centsToCurrency(payment.amount_cents, trip.currency ?? "EUR")}
                   </Text>
                 </Pressable>
               );

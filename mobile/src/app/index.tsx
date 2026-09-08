@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { createRemoteDemoTrip, createRemoteTrip } from "../api/tripApi";
+import { createRemoteDemoTrip, createRemoteTrip, fetchTrip, saveTrip } from "../api/tripApi";
 import { savePhotoPin, savePhotoToken } from "../api/photoSession";
 import { loadRecentTrips, type RecentTrip } from "../api/recentTrips";
 import { DonateButton } from "../components/donate-button";
 import { Colors, type ColorTheme } from "../constants/theme";
 import { useTranslation } from "../i18n";
 import { parseTripInput } from "../utils/parseTripInput";
+import { backupJson, createTripFromTemplate, findTripTemplate, TRIP_TEMPLATES } from "../domain";
 
 function makeStyles(colors: ColorTheme) {
   return StyleSheet.create({
@@ -188,6 +189,56 @@ export default function HomeScreen() {
     }
   };
 
+  const handleTemplate = async (templateId: string) => {
+    const template = findTripTemplate(templateId);
+    if (!template) {
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      const created = await createRemoteTrip(template.name);
+      const trip = createTripFromTemplate(templateId);
+      await saveTrip(created.id, trip);
+      savePhotoPin(created.id, created.pin);
+      savePhotoToken(created.id, created.photos_token);
+      router.push({ pathname: "/t/[id]", params: { id: created.id } });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("Could not create trip"));
+      setBusy(false);
+    }
+  };
+
+  const handleExportBackup = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const trips = await Promise.all(
+        recents.map(async (recent) => fetchTrip(recent.id)),
+      );
+      if (trips.length === 0) {
+        setError(t("No trips on this device to back up"));
+        setBusy(false);
+        return;
+      }
+      await Share.share({
+        message: backupJson(trips),
+        title: "Fair Share backup",
+      });
+      setBusy(false);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("Could not export backup"));
+      setBusy(false);
+    }
+  };
+
+  const handleRestoreInfo = () => {
+    Alert.alert(
+      t("Restore backup"),
+      t("On the mobile app you can only export backups. Restore them on the web app (fair-share-trips.netlify.app)."),
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -257,6 +308,41 @@ export default function HomeScreen() {
           >
             <Text style={styles.secondaryButtonText}>{t("Try a demo")}</Text>
           </Pressable>
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+            onPress={() => void handleExportBackup()}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={t("Export backup")}
+          >
+            <Text style={styles.secondaryButtonText}>{t("Export backup")}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+            onPress={handleRestoreInfo}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={t("Restore backup")}
+          >
+            <Text style={styles.secondaryButtonText}>{t("Restore backup")}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("Start from a template")}</Text>
+          <Text style={styles.subtitle}>{t("Create a trip with people already added.")}</Text>
+          {TRIP_TEMPLATES.map((template) => (
+            <Pressable
+              key={template.id}
+              style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+              onPress={() => void handleTemplate(template.id)}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={t(template.name)}
+            >
+              <Text style={styles.secondaryButtonText}>{t(template.name)}</Text>
+            </Pressable>
+          ))}
         </View>
 
         {recents.length > 0 ? (
@@ -280,6 +366,10 @@ export default function HomeScreen() {
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Text style={styles.subtitle}>
+          {t("No accounts, no ads, no tracking. Your data lives on the trip link, and backups stay on this device.")}
+        </Text>
 
         <DonateButton />
       </ScrollView>

@@ -2,11 +2,13 @@ import { TRIP_ID_RE } from "@fairshare/domain";
 import { initTheme } from "./theme";
 import { initLanguage } from "./i18n";
 import { captureInstallPrompt } from "./install";
+import { initCrashReporting } from "./crash";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
 
 initTheme();
 initLanguage();
+initCrashReporting();
 
 const app = document.getElementById("app");
 if (!app) {

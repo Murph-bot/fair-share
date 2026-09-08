@@ -1,7 +1,7 @@
 export { FairShareError, ValidationError, UnknownPersonError, ExpenseNotFoundError, AuthError, RateLimitError, ConfigError } from "../../../packages/domain/src/errors";
-export { parseAmount, centsToEuro } from "../../../packages/domain/src/money";
+export { parseAmount, centsToEuro, centsToCurrency, currencySymbol } from "../../../packages/domain/src/money";
 export { equalSplit, weightedSplit } from "../../../packages/domain/src/splitter";
-export { computeBalances } from "../../../packages/domain/src/balances";
+export { computeBalances, computeStats, type TripStats } from "../../../packages/domain/src/balances";
 export { settle, type Payment } from "../../../packages/domain/src/settlement";
 export {
   SCHEMA_VERSION,
@@ -15,12 +15,20 @@ export {
   recordPayment,
   unrecordPayment,
   isPaymentCompleted,
+  paymentStatus,
   parseTrip,
   createTrip,
   archiveTrip,
   unarchiveTrip,
   createExampleTrip,
+  createTripFromTemplate,
+  findTripTemplate,
+  TRIP_TEMPLATES,
+  type TripTemplate,
+  effectiveAmountCents,
   tripFileJson,
+  backupJson,
+  parseBackup,
   type Trip,
   type Expense,
   type NewExpenseInput,

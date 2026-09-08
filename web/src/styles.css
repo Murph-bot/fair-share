@@ -569,3 +569,41 @@ fieldset {
   align-items: center;
   gap: 0.5rem;
 }
+
+.footer-note {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .topbar,
+  #banner,
+  .trip > .block:not(#print-summary),
+  .install-callout,
+  .home-header {
+    display: none !important;
+  }
+
+  .page {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .print-only {
+    display: block !important;
+    border: none;
+    padding: 0;
+  }
+
+  .print-only .ledger {
+    break-inside: avoid;
+  }
+}
