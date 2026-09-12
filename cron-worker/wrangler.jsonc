@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "fair-share-cron",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 3 * * *"]
+  },
+  "vars": {
+    "CRON_TARGET_URL": "https://fair-share-trips.pages.dev/api/admin/expire-photos"
+  }
+}

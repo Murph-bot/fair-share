@@ -5,20 +5,6 @@ import { loadPhotoToken, savePhotoToken } from "./photoSession";
 
 export type PhotoPart = Blob | { uri: string; name: string; type: string };
 
-export type OriginalUploadSign = {
-  photoId: string;
-  timestamp: number;
-  signature: string;
-  apiKey: string;
-  cloudName: string;
-  folder: string;
-  publicId: string;
-  type: string;
-  uploadUrl: string;
-  maxFileSize: number;
-  allowedFormats: string;
-};
-
 export function absolutePhotoUrl(url: string): string {
   if (url.startsWith("https://") || url.startsWith("http://")) {
     return url;
@@ -81,7 +67,7 @@ export async function fetchPhotos(tripId: string): Promise<PhotoRecord[]> {
 export async function uploadPhoto(
   tripId: string,
   photo: PhotoPart,
-  extras?: { photoId?: string; cloudinaryId?: string },
+  extras?: { photoId?: string; original?: PhotoPart },
 ): Promise<PhotoRecord> {
   const data = new FormData();
   if (photo instanceof Blob) {
@@ -92,8 +78,8 @@ export async function uploadPhoto(
   if (extras?.photoId) {
     data.append("photo_id", extras.photoId);
   }
-  if (extras?.cloudinaryId) {
-    data.append("cloudinary_id", extras.cloudinaryId);
+  if (extras?.original) {
+    data.append("original", extras.original as unknown as Blob);
   }
   const response = await fetch(apiUrl(`/api/trips/${tripId}/photos`), {
     method: "POST",
@@ -143,63 +129,5 @@ export async function lockTripPhotos(
   return { pin: body.pin, photos_token: body.photos_token };
 }
 
-export async function signOriginalUpload(tripId: string): Promise<OriginalUploadSign> {
-  const response = await fetch(apiUrl(`/api/trips/${tripId}/photos/sign`), {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...(await tripAuthHeaders(tripId)),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(await readError(response));
-  }
-  const body = (await response.json()) as Partial<OriginalUploadSign>;
-  if (
-    typeof body.photoId !== "string" ||
-    typeof body.timestamp !== "number" ||
-    typeof body.signature !== "string" ||
-    typeof body.apiKey !== "string" ||
-    typeof body.cloudName !== "string" ||
-    typeof body.folder !== "string" ||
-    typeof body.publicId !== "string" ||
-    typeof body.type !== "string" ||
-    typeof body.uploadUrl !== "string" ||
-    typeof body.maxFileSize !== "number" ||
-    typeof body.allowedFormats !== "string"
-  ) {
-    throw new Error("Could not prepare original upload");
-  }
-  return body as OriginalUploadSign;
-}
-
-export async function uploadOriginalToCloudinary(
-  file: PhotoPart,
-  sign: OriginalUploadSign,
-): Promise<string> {
-  if (file instanceof Blob && file.size > sign.maxFileSize) {
-    throw new Error("Original is too large");
-  }
-  const data = new FormData();
-  if (file instanceof Blob) {
-    data.append("file", file);
-  } else {
-    data.append("file", file as unknown as Blob);
-  }
-  data.append("api_key", sign.apiKey);
-  data.append("timestamp", String(sign.timestamp));
-  data.append("signature", sign.signature);
-  data.append("folder", sign.folder);
-  data.append("public_id", sign.publicId);
-  data.append("type", sign.type);
-  data.append("allowed_formats", sign.allowedFormats);
-  const response = await fetch(sign.uploadUrl, { method: "POST", body: data });
-  if (!response.ok) {
-    throw new Error("Could not upload original");
-  }
-  const body = (await response.json()) as { public_id?: unknown };
-  if (typeof body.public_id !== "string" || !body.public_id) {
-    throw new Error("Could not upload original");
-  }
-  return body.public_id;
-}
+// Cloudinary signed original uploads were removed in the Cloudflare migration.
+// Originals now upload through the same Worker endpoint as display copies.

@@ -163,15 +163,15 @@ export async function fetchPhotos(tripId: string): Promise<PhotoRecord[]> {
 export async function uploadPhoto(
   tripId: string,
   jpeg: Blob,
-  extras?: { photoId?: string; cloudinaryId?: string },
+  extras?: { photoId?: string; original?: Blob },
 ): Promise<PhotoRecord> {
   const data = new FormData();
   data.append("photo", new File([jpeg], "photo.jpg", { type: "image/jpeg" }));
   if (extras?.photoId) {
     data.append("photo_id", extras.photoId);
   }
-  if (extras?.cloudinaryId) {
-    data.append("cloudinary_id", extras.cloudinaryId);
+  if (extras?.original) {
+    data.append("original", new File([extras.original], "original.jpg", { type: "image/jpeg" }));
   }
   const res = await fetch(`/api/trips/${tripId}/photos`, {
     method: "POST",
@@ -214,43 +214,5 @@ export async function lockTripPhotos(
   return { pin: body.pin, photos_token: body.photos_token };
 }
 
-export type OriginalUploadSign = {
-  photoId: string;
-  timestamp: number;
-  signature: string;
-  apiKey: string;
-  cloudName: string;
-  folder: string;
-  publicId: string;
-  type: string;
-  uploadUrl: string;
-  maxFileSize: number;
-  allowedFormats: string;
-};
-
-export async function signOriginalUpload(tripId: string): Promise<OriginalUploadSign> {
-  const res = await fetch(`/api/trips/${tripId}/photos/sign`, {
-    method: "POST",
-    headers: authHeaders(tripId),
-  });
-  if (!res.ok) {
-    throw new Error(await readError(res));
-  }
-  const body = (await res.json()) as Partial<OriginalUploadSign>;
-  if (
-    typeof body.photoId !== "string" ||
-    typeof body.timestamp !== "number" ||
-    typeof body.signature !== "string" ||
-    typeof body.apiKey !== "string" ||
-    typeof body.cloudName !== "string" ||
-    typeof body.folder !== "string" ||
-    typeof body.publicId !== "string" ||
-    typeof body.type !== "string" ||
-    typeof body.uploadUrl !== "string" ||
-    typeof body.maxFileSize !== "number" ||
-    typeof body.allowedFormats !== "string"
-  ) {
-    throw new Error("Could not prepare original upload");
-  }
-  return body as OriginalUploadSign;
-}
+// Cloudinary signed original uploads were removed in the Cloudflare migration.
+// Originals now upload through the same Worker endpoint as display copies.

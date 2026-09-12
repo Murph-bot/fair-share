@@ -1,72 +1,56 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { PHOTO_RETENTION_MS } from "@fairshare/domain/photos";
-import { cloudinaryPublicId } from "@fairshare/domain/cloudinary";
-
-const mockPhotos = new Map<string, { data: Uint8Array; metadata: any }>();
-
-vi.mock("../../netlify/functions/_shared/stores", () => ({
-  photosStore: () => ({
-    getMetadata: async (key: string) => {
-      const p = mockPhotos.get(key);
-      return p ? { etag: "1", metadata: p.metadata } : null;
-    },
-    list: async () => ({
-      blobs: Array.from(mockPhotos.keys()).map((k) => ({ key: k, etag: "1" })),
-    }),
-    delete: async (key: string) => {
-      mockPhotos.delete(key);
-    },
-  }),
-}));
-
-import { expireDuePhotos } from "../../netlify/functions/expire-photos";
+import { expireDuePhotos } from "../../pages/functions/_shared/expiry";
+import { makeFakeEnv } from "./helpers/fakeEnv";
+import type { Env } from "../../pages/functions/_shared/env";
 
 const tripId = "11111111111111111111111111111111";
 const photoId = "22222222222222222222222222222222";
 
 describe("expireDuePhotos", () => {
+  let env: Env;
+  let photos: Map<string, { data: Uint8Array; metadata: Record<string, string>; uploaded: Date }>;
+
   beforeEach(() => {
-    mockPhotos.clear();
-    process.env.CLOUDINARY_CLOUD_NAME = "demo";
-    process.env.CLOUDINARY_API_KEY = "1234";
-    process.env.CLOUDINARY_API_SECRET = "abcd";
+    const fake = makeFakeEnv();
+    env = fake.env;
+    photos = fake.photos;
   });
 
-  it("deletes expired display blobs and their Cloudinary originals", async () => {
+  it("deletes expired display blobs together with their originals", async () => {
     const old = new Date(Date.now() - PHOTO_RETENTION_MS - 1000).toISOString();
-    mockPhotos.set(`${tripId}/${photoId}`, {
+    photos.set(`${tripId}/${photoId}`, {
       data: new Uint8Array([1]),
-      metadata: { uploadedAt: old, cloudinaryId: cloudinaryPublicId(tripId, photoId) },
+      metadata: { uploadedAt: old, hasOriginal: "1" },
+      uploaded: new Date(0),
     });
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ result: "ok" }), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    photos.set(`${tripId}/${photoId}/original`, {
+      data: new Uint8Array([1]),
+      metadata: { uploadedAt: old, hasOriginal: "1" },
+      uploaded: new Date(0),
+    });
 
-    await expireDuePhotos(Date.now());
+    await expireDuePhotos(env, Date.now());
 
-    expect(mockPhotos.size).toBe(0);
-    expect(fetchMock).toHaveBeenCalled();
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/image/destroy");
-    vi.unstubAllGlobals();
+    expect(photos.size).toBe(0);
   });
 
-  it("skips nested blob keys and recent photos", async () => {
+  it("skips nested keys and recent photos", async () => {
     const recent = new Date().toISOString();
-    mockPhotos.set(`${tripId}/${photoId}`, {
+    photos.set(`${tripId}/${photoId}`, {
       data: new Uint8Array([1]),
-      metadata: { uploadedAt: recent, cloudinaryId: "should-not-delete" },
+      metadata: { uploadedAt: recent, hasOriginal: "0" },
+      uploaded: new Date(),
     });
-    mockPhotos.set(`${tripId}/${photoId}/extra`, {
+    photos.set(`${tripId}/${photoId}/extra`, {
       data: new Uint8Array([1]),
-      metadata: { uploadedAt: new Date(0).toISOString(), cloudinaryId: "nested" },
+      metadata: { uploadedAt: new Date(0).toISOString(), hasOriginal: "0" },
+      uploaded: new Date(0),
     });
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
 
-    await expireDuePhotos(Date.now());
+    await expireDuePhotos(env, Date.now());
 
-    expect(mockPhotos.has(`${tripId}/${photoId}`)).toBe(true);
-    expect(mockPhotos.has(`${tripId}/${photoId}/extra`)).toBe(true);
-    expect(fetchMock).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
+    expect(photos.has(`${tripId}/${photoId}`)).toBe(true);
+    expect(photos.has(`${tripId}/${photoId}/extra`)).toBe(true);
   });
 });

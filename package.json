@@ -4,10 +4,16 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "netlify dev",
-    "build": "npm --prefix web run build"
+    "build": "npm --prefix web run build",
+    "build:worker": "esbuild pages/_worker.ts --bundle --format=esm --target=es2022 --outfile=web/dist/_worker.js --log-level=warning",
+    "build:pages": "npm run build && npm run build:worker",
+    "typecheck:pages": "tsc --project pages/tsconfig.json --noEmit && tsc --project cron-worker/tsconfig.json --noEmit"
   },
   "dependencies": {
     "@netlify/blobs": "^10.0.8",
     "@netlify/functions": "^4.2.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

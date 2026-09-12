@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fair-share-trips",
+  "pages_build_output_dir": "web/dist",
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "FAIRSHARE_DB",
+      "database_name": "fairshare-db",
+      "database_id": "93ecd240-edea-48f6-b156-ebc9c19a5854"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FAIRSHARE_PHOTOS",
+      "bucket_name": "fairshare-photos"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "PIN_ATTEMPTS",
+      "id": "3248c97eda0a4581bf97994511fc4cd8"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "development"
+  }
+}

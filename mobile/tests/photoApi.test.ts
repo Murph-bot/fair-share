@@ -6,7 +6,6 @@ import {
   deletePhoto,
   fetchPhotos,
   lockTripPhotos,
-  signOriginalUpload,
   unlockPhotos,
   uploadPhoto,
 } from "../src/api/photoApi";
@@ -99,13 +98,13 @@ describe("photoApi", () => {
 
     await uploadPhoto(tripId, new Blob(["jpeg"], { type: "image/jpeg" }), {
       photoId,
-      cloudinaryId: `fairshare/${tripId}/${photoId}`,
+      original: new Blob(["full-res"], { type: "image/jpeg" }),
     });
     const [, options] = fetchSpy.mock.calls[0] ?? [];
     expect(options?.method).toBe("POST");
     const body = options?.body as FormData;
     expect(body.get("photo_id")).toBe(photoId);
-    expect(body.get("cloudinary_id")).toBe(`fairshare/${tripId}/${photoId}`);
+    expect(body.get("original")).toBeInstanceOf(Blob);
   });
 
   it("deletes a photo", async () => {
@@ -132,10 +131,5 @@ describe("photoApi", () => {
     });
     const { loadPhotoToken } = await import("../src/api/photoSession");
     await expect(loadPhotoToken(tripId)).resolves.toBe("lock-token");
-  });
-
-  it("rejects an incomplete original sign response", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockJsonResponse({ photoId })));
-    await expect(signOriginalUpload(tripId)).rejects.toThrow("Could not prepare original upload");
   });
 });

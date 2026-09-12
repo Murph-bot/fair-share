@@ -16,11 +16,10 @@ import {
   deletePhoto,
   fetchPhotos,
   lockTripPhotos,
-  signOriginalUpload,
   unlockPhotos,
-  uploadOriginalToCloudinary,
   uploadPhoto,
 } from "../api/photoApi";
+import { MAX_ORIGINAL_BYTES } from "../../../packages/domain/src/photos";
 import { loadPhotoToken } from "../api/photoSession";
 import type { PhotoRecord, PublicTrip } from "../domain/photos";
 import { Colors, type ColorTheme } from "../constants/theme";
@@ -199,19 +198,9 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       if (!picked) {
         return;
       }
-      let extras: { photoId?: string; cloudinaryId?: string } | undefined;
       const originalSize = picked.original.fileSize ?? 0;
-      if (originalSize > 0) {
-        try {
-          const sign = await signOriginalUpload(tripId);
-          if (originalSize <= sign.maxFileSize) {
-            const cloudinaryId = await uploadOriginalToCloudinary(picked.original, sign);
-            extras = { photoId: sign.photoId, cloudinaryId };
-          }
-        } catch {
-          extras = undefined;
-        }
-      }
+      const extras =
+        originalSize > 0 && originalSize <= MAX_ORIGINAL_BYTES ? { original: picked.original } : undefined;
       await uploadPhoto(tripId, picked.display, extras);
       await refresh();
     } catch (caught) {

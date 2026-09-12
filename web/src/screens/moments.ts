@@ -2,13 +2,11 @@ import {
   deletePhoto,
   fetchPhotos,
   lockTripPhotos,
-  signOriginalUpload,
   unlockPhotos,
   uploadPhoto,
   type PublicTrip,
 } from "../api";
-import { uploadOriginalToCloudinary } from "../cloudinary-upload";
-import { MAX_ORIGINAL_BYTES } from "@fairshare/domain/cloudinary";
+import { MAX_ORIGINAL_BYTES } from "@fairshare/domain/photos";
 import { compressImage } from "../compress-image";
 import type { PhotoRecord } from "@fairshare/domain/photos";
 import { announce } from "../announce";
@@ -30,25 +28,14 @@ function setLocalError(el: HTMLElement | null, message: string | null): void {
 }
 
 function safePhotoUrl(url: string): string | undefined {
-  if (url.startsWith("/uploads/photos/") || url.startsWith("/.netlify/images?")) {
+  if (url.startsWith("/uploads/photos/")) {
     return url;
   }
   return undefined;
 }
 
 function safeOriginalUrl(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") {
-      return undefined;
-    }
-    if (parsed.hostname === "api.cloudinary.com" || parsed.hostname.endsWith(".cloudinary.com")) {
-      return url;
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
+  return safePhotoUrl(url);
 }
 
 function galleryHtml(photos: PhotoRecord[]): string {
@@ -214,16 +201,8 @@ export function bindMoments(root: HTMLElement, tripId: string, trip: PublicTrip)
       setLocalError(photoError, null);
       fileInput.disabled = true;
       const jpeg = await compressImage(file);
-      let extras: { photoId?: string; cloudinaryId?: string } | undefined;
-      if (file.size > jpeg.size && file.size <= MAX_ORIGINAL_BYTES) {
-        try {
-          const sign = await signOriginalUpload(tripId);
-          const cloudinaryId = await uploadOriginalToCloudinary(file, sign);
-          extras = { photoId: sign.photoId, cloudinaryId };
-        } catch {
-          extras = undefined;
-        }
-      }
+      const extras =
+        file.size > jpeg.size && file.size <= MAX_ORIGINAL_BYTES ? { original: file } : undefined;
       await uploadPhoto(tripId, jpeg, extras);
       await fillList(body, tripId);
     } catch (err) {
