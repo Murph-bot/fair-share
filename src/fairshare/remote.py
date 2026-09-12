@@ -20,7 +20,7 @@ def normalize_host(host: str) -> str:
     trimmed = host.strip().rstrip("/")
     if not trimmed:
         raise ValidationError(
-            "Pass --host or set FAIRSHARE_API (e.g. https://fair-share-trips.netlify.app)"
+            "Pass --host or set FAIRSHARE_API (e.g. https://fair-share-trips.pages.dev)"
         )
     return trimmed
 

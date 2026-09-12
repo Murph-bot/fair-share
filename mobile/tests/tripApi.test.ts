@@ -40,7 +40,7 @@ describe("tripApi", () => {
       photos_token: "token-123",
     });
     expect(fetchSpy).toHaveBeenCalledWith(
-      "https://fair-share-trips.netlify.app/api/trips",
+      "https://fair-share-trips.pages.dev/api/trips",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -62,7 +62,7 @@ describe("tripApi", () => {
 
     await expect(fetchTrip(tripId)).resolves.toEqual({ ...trip, photos_locked: false });
     expect(fetchSpy).toHaveBeenCalledWith(
-      `https://fair-share-trips.netlify.app/api/trips/${tripId}`,
+      `https://fair-share-trips.pages.dev/api/trips/${tripId}`,
       expect.objectContaining({ method: "GET" }),
     );
   });

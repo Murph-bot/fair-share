@@ -35,15 +35,15 @@ afterEach(() => {
 describe("absolutePhotoUrl", () => {
   it("prefixes relative display and thumb URLs", () => {
     expect(absolutePhotoUrl("/uploads/photos/a/b")).toBe(
-      "https://fair-share-trips.netlify.app/uploads/photos/a/b",
+      "https://fair-share-trips.pages.dev/uploads/photos/a/b",
     );
-    expect(absolutePhotoUrl("/.netlify/images?url=%2Fuploads%2Fphotos%2Fa%2Fb")).toBe(
-      "https://fair-share-trips.netlify.app/.netlify/images?url=%2Fuploads%2Fphotos%2Fa%2Fb",
+    expect(absolutePhotoUrl("/uploads/photos/a/b?original=1")).toBe(
+      "https://fair-share-trips.pages.dev/uploads/photos/a/b?original=1",
     );
   });
 
-  it("leaves Cloudinary originals unchanged", () => {
-    const original = "https://res.cloudinary.com/demo/image/authenticated/s--x--/v1/fairshare/a/b.jpg";
+  it("leaves absolute URLs unchanged", () => {
+    const original = "https://example.com/original.jpg";
     expect(absolutePhotoUrl(original)).toBe(original);
   });
 });
@@ -55,7 +55,7 @@ describe("photoApi", () => {
 
     await expect(unlockPhotos(tripId, "123456")).resolves.toBe("session-token");
     expect(fetchSpy).toHaveBeenCalledWith(
-      `https://fair-share-trips.netlify.app/api/trips/${tripId}/session`,
+      `https://fair-share-trips.pages.dev/api/trips/${tripId}/session`,
       expect.objectContaining({ method: "POST" }),
     );
     const { loadPhotoToken } = await import("../src/api/photoSession");
@@ -73,14 +73,14 @@ describe("photoApi", () => {
       id: photoId,
       createdAt: "2026-01-01T00:00:00.000Z",
       displayUrl: `/uploads/photos/${tripId}/${photoId}`,
-      thumbUrl: `/.netlify/images?url=%2Fuploads%2Fphotos%2F${tripId}%2F${photoId}`,
+      thumbUrl: `/uploads/photos/${tripId}/${photoId}`,
       originalUrl: null,
     };
     const fetchSpy = vi.fn().mockResolvedValue(mockJsonResponse({ photos: [photo] }));
     vi.stubGlobal("fetch", fetchSpy);
 
     const photos = await fetchPhotos(tripId);
-    expect(photos[0]?.displayUrl).toBe(`https://fair-share-trips.netlify.app/uploads/photos/${tripId}/${photoId}`);
+    expect(photos[0]?.displayUrl).toBe(`https://fair-share-trips.pages.dev/uploads/photos/${tripId}/${photoId}`);
     const [, options] = fetchSpy.mock.calls[0] ?? [];
     expect((options?.headers as Record<string, string>).Authorization).toBe("Bearer session-token");
   });
@@ -114,7 +114,7 @@ describe("photoApi", () => {
 
     await deletePhoto(tripId, photoId);
     expect(fetchSpy).toHaveBeenCalledWith(
-      `https://fair-share-trips.netlify.app/api/trips/${tripId}/photos/${photoId}`,
+      `https://fair-share-trips.pages.dev/api/trips/${tripId}/photos/${photoId}`,
       expect.objectContaining({ method: "DELETE" }),
     );
   });

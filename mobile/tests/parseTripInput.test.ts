@@ -9,7 +9,7 @@ describe("parseTripInput", () => {
   });
 
   it("accepts web links and deep links", () => {
-    expect(parseTripInput("https://fair-share-trips.netlify.app/t/ff4765be974564a2503e8f94f67538dd")).toEqual({
+    expect(parseTripInput("https://fair-share-trips.pages.dev/t/ff4765be974564a2503e8f94f67538dd")).toEqual({
       ok: true,
       id: "ff4765be974564a2503e8f94f67538dd",
     });
@@ -25,7 +25,7 @@ describe("parseTripInput", () => {
       ok: false,
       error: "Paste a Fair Share link or the 32-character trip ID",
     });
-    expect(parseTripInput("https://fair-share-trips.netlify.app/t/123")).toEqual({
+    expect(parseTripInput("https://fair-share-trips.pages.dev/t/123")).toEqual({
       ok: false,
       error: "Paste a Fair Share link or the 32-character trip ID",
     });

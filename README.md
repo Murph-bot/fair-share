@@ -54,10 +54,10 @@ fairshare remove-expense <id>
 fairshare edit-expense <id> "Lunch" --payer Bob --amount 20 --with Alice,Bob
 
 # Download a hosted trip (money only — no photos, no PIN hash)
-fairshare pull --id <32-hex-id> --host https://fair-share-trips.netlify.app
+fairshare pull --id <32-hex-id> --host https://fair-share-trips.pages.dev
 
 # Upload this file as a new hosted trip (prints a new link and PIN)
-fairshare push --host https://fair-share-trips.netlify.app
+fairshare push --host https://fair-share-trips.pages.dev
 
 # Use a custom data file
 fairshare --file /path/to/trip.json init "My Trip"
@@ -84,23 +84,30 @@ Uses a greedy min-cash-flow heuristic: repeatedly pairs the largest debtor with 
 
 ## Web app
 
-A cream/brown PWA (euro, shared trip links) lives in `web/` and deploys to Netlify.
+A cream/brown PWA (shared trip links) lives in `web/` and deploys to Cloudflare Pages at `https://fair-share-trips.pages.dev`.
 
 ```bash
 npm ci
 npm --prefix web ci
-npx netlify dev
+npm run build:pages          # builds web/dist + the Pages _worker.js
+npx wrangler pages dev web/dist
 ```
 
-Open http://localhost:8888 — create a trip, then share `/t/<id>`. Anyone with the link can edit expenses. Photos use a 6-digit PIN shown on the trip page (Copy PIN).
+Open http://localhost:8788 — create a trip, then share `/t/<id>`. Anyone with the link can edit expenses. Photos use a 6-digit PIN shown on the trip page (Copy PIN). The PWA is installable and works offline for previously viewed trips and photos (service worker caches trips + public photos).
 
 **Download JSON** on a trip page saves people and expenses only. **Open JSON** on the home page creates a *new* hosted trip from that file (new id and PIN). Photos are never in the file.
 
 You can also use `fairshare pull` / `fairshare push` with `--host` or `FAIRSHARE_API`. `push` always creates a new hosted trip.
 
-Set `PHOTO_PIN_PEPPER` in `.env` (see `.env.example`) for local functions, and the same key in the Netlify UI for production. Without it, creating a trip fails.
+### Cloudflare setup
 
-Photos are stored in Netlify Blobs, compressed on the device, and removed automatically after a year. Optional full-resolution originals go to Cloudinary (authenticated assets, signed download URLs). Set `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `.env` and the Netlify UI. If those are missing, gallery uploads still work and `originalUrl` stays empty.
+- Bindings (see `wrangler.jsonc`): D1 `fairshare-db`, R2 `fairshare-photos`, KV `PIN_ATTEMPTS`.
+- Schema: `wrangler d1 execute fairshare-db --remote --file db/schema.sql` (and `--local` for dev).
+- Secrets: `npx wrangler pages secret put PHOTO_PIN_PEPPER` and `npx wrangler pages secret put CRON_SECRET` (local values go in `.dev.vars`).
+- Deploy: `npm run build:pages && npx wrangler pages deploy web/dist`.
+- Photo expiry cron: separate Worker in `cron-worker/` (`wrangler deploy` from that folder) calls `/api/admin/expire-photos` daily with `CRON_SECRET`.
+
+Photos are stored in R2 (display copies + full-res originals, uploaded in one request), compressed on the device, and removed automatically after a year. Thumbnails are CSS-cropped originals — no paid image transforms. Originals are kept at full quality in R2.
 
 ## Mobile app
 

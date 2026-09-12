@@ -1,4 +1,4 @@
-export const DEFAULT_API_BASE_URL = "https://fair-share-trips.netlify.app";
+export const DEFAULT_API_BASE_URL = "https://fair-share-trips.pages.dev";
 
 export function apiBaseUrl(): string {
   return (process.env.EXPO_PUBLIC_FAIRSHARE_API ?? DEFAULT_API_BASE_URL).replace(/\/$/, "");
