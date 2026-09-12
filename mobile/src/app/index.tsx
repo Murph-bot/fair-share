@@ -235,7 +235,7 @@ export default function HomeScreen() {
   const handleRestoreInfo = () => {
     Alert.alert(
       t("Restore backup"),
-      t("On the mobile app you can only export backups. Restore them on the web app (fair-share-trips.netlify.app)."),
+      t("On the mobile app you can only export backups. Restore them on the web app (fair-share-trips.pages.dev)."),
     );
   };
 

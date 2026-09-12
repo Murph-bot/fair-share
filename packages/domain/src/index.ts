@@ -64,11 +64,4 @@ export {
   type PhotoRecord,
   type PublicTrip,
 } from "./photos";
-export {
-  MAX_ORIGINAL_BYTES,
-  ORIGINAL_ALLOWED_FORMATS,
-  CLOUDINARY_ASSET_TYPE,
-  cloudinaryFolder,
-  cloudinaryPublicId,
-} from "./cloudinary";
 export { getLanguage, getSupportedLanguages, setLanguage, t, type Language } from "./i18n";

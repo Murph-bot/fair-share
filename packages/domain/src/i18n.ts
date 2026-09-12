@@ -84,7 +84,7 @@ const el: Translations = {
   "Could not restore backup": "Δεν ήταν δυνατή η επαναφορά αντιγράφου",
   "No trips found in this backup": "Δεν βρέθηκαν ταξίδια σε αυτό το αντίγραφο",
   "Imported trip": "Εισαγόμενο ταξίδι",
-  "On the mobile app you can only export backups. Restore them on the web app (fair-share-trips.netlify.app).": "Στην εφαρμογή κινητού μπορείς μόνο να εξάγεις αντίγραφα. Επανάφερέ τα στην web εφαρμογή (fair-share-trips.netlify.app).",
+  "On the mobile app you can only export backups. Restore them on the web app (fair-share-trips.pages.dev).": "Στην εφαρμογή κινητού μπορείς μόνο να εξάγεις αντίγραφα. Επανάφερέ τα στην web εφαρμογή (fair-share-trips.pages.dev).",
   "Start from a template": "Ξεκίνα από πρότυπο",
   "Create a trip with people already added.": "Δημιούργησε ταξίδι με άτομα ήδη προστεθειμένα.",
   "Weekend trip": "Ταξίδι Σαββατοκύριακου",
