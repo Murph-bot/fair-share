@@ -77,21 +77,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // App shell + assets: stale-while-revalidate with offline fallback.
+  // App shell + assets: network-first with offline fallback.
   if (event.request.mode === "navigate") {
     event.respondWith(
-      caches.open(CACHE).then(async (cache) => {
-        const cached = await cache.match("/index.html");
-        const network = fetch(event.request)
-          .then((response) => {
-            if (response.ok) {
-              cache.put("/index.html", response.clone());
-            }
-            return response;
-          })
-          .catch(() => cached);
-        return cached ? Promise.race([network, Promise.resolve(cached)]) : network;
-      }),
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE).then((cache) => cache.put("/index.html", clone));
+          return response;
+        })
+        .catch(() => caches.match("/index.html")),
     );
     return;
   }
