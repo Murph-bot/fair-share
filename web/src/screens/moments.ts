@@ -201,8 +201,21 @@ export function bindMoments(root: HTMLElement, tripId: string, trip: PublicTrip)
       setLocalError(photoError, null);
       fileInput.disabled = true;
       const jpeg = await compressImage(file);
-      const extras =
-        file.size > jpeg.size && file.size <= MAX_ORIGINAL_BYTES ? { original: file } : undefined;
+      // The server accepts JPEG originals only. Keep real JPEGs as-is; convert
+      // anything else (PNG, HEIC, WebP) to a full-resolution JPEG so the
+      // upload can't fail and the original is still preserved.
+      let original: Blob | undefined;
+      if (file.type === "image/jpeg" || file.type === "image/jpg") {
+        if (file.size > jpeg.size && file.size <= MAX_ORIGINAL_BYTES) {
+          original = file;
+        }
+      } else {
+        const converted = await compressImage(file, { maxEdge: null, quality: 0.95 });
+        if (converted.size <= MAX_ORIGINAL_BYTES) {
+          original = converted;
+        }
+      }
+      const extras = original ? { original } : undefined;
       await uploadPhoto(tripId, jpeg, extras);
       await fillList(body, tripId);
     } catch (err) {

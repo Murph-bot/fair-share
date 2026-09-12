@@ -26,6 +26,7 @@ import {
   loadPhotoList,
   removeCachedPhoto,
   savePhotoList,
+  stagePhotoForQueue,
 } from "../api/photoCache";
 import { enqueuePhotoUpload, flushPhotoQueue, pendingPhotoUploads, removePhotoUpload } from "../api/photoQueue";
 import { isOnline } from "../api/networkStatus";
@@ -255,26 +256,42 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       if (!picked) {
         return;
       }
-      if (!(await isOnline())) {
-        // Offline: queue locally, it syncs when connectivity returns.
+      const queuePicked = async () => {
+        const photoId = newPhotoId();
+        const stagedDisplay = await stagePhotoForQueue(photoId, picked.display.uri, "display");
+        const stagedOriginal = picked.original?.uri
+          ? await stagePhotoForQueue(photoId, picked.original.uri, "original")
+          : null;
         await enqueuePhotoUpload({
           tripId,
-          photoId: newPhotoId(),
-          displayUri: picked.display.uri,
+          photoId,
+          displayUri: stagedDisplay ?? picked.display.uri,
           displayName: picked.display.name,
           displayType: picked.display.type,
-          originalUri: picked.original.uri,
-          originalName: picked.original.name,
-          originalType: picked.original.type,
+          originalUri: stagedOriginal ?? picked.original?.uri ?? null,
+          originalName: picked.original?.name ?? null,
+          originalType: picked.original?.type ?? null,
           createdAt: new Date().toISOString(),
         });
+      };
+      if (!(await isOnline())) {
+        // Offline: queue locally, it syncs when connectivity returns.
+        await queuePicked();
       } else {
-        const originalSize = picked.original.fileSize ?? 0;
-        const extras =
-          originalSize > 0 && originalSize <= MAX_ORIGINAL_BYTES
-            ? { original: picked.original }
-            : undefined;
-        await uploadPhoto(tripId, picked.display, extras);
+        try {
+          const originalSize = picked.original?.fileSize ?? 0;
+          const extras =
+            picked.original && originalSize > 0 && originalSize <= MAX_ORIGINAL_BYTES
+              ? { original: picked.original }
+              : undefined;
+          await uploadPhoto(tripId, picked.display, extras);
+        } catch (caught) {
+          // Network dropped mid-upload: queue it like an offline pick.
+          if (!(caught instanceof TypeError)) {
+            throw caught;
+          }
+          await queuePicked();
+        }
       }
       await syncPhotos();
     } catch (caught) {

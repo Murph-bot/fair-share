@@ -134,12 +134,28 @@ export function useTrip(tripId: string | null): UseTripResult {
           void saveSnapshot(tripId, nextTrip as PublicTrip);
           return true;
         }
-        const savedTrip = await saveTrip(tripId, nextTrip);
-        tripRef.current = savedTrip;
-        setTrip(savedTrip);
-        setOffline(false);
-        void saveSnapshot(tripId, savedTrip);
-        return true;
+        try {
+          const savedTrip = await saveTrip(tripId, nextTrip);
+          tripRef.current = savedTrip;
+          setTrip(savedTrip);
+          setOffline(false);
+          void saveSnapshot(tripId, savedTrip);
+          return true;
+        } catch (caught) {
+          // A failed request (e.g. connectivity dropped between the online
+          // check and the call) queues the edit like an offline mutation.
+          // Server rejections (4xx/5xx) surface as errors instead.
+          if (!(caught instanceof TypeError)) {
+            throw caught;
+          }
+          await enqueue(tripId, nextTrip);
+          tripRef.current = nextTrip as PublicTrip;
+          setTrip(nextTrip as PublicTrip);
+          setQueued(true);
+          setOffline(true);
+          void saveSnapshot(tripId, nextTrip as PublicTrip);
+          return true;
+        }
       } catch (caught) {
         setError(errorMessage(caught));
         return false;

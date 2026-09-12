@@ -87,4 +87,53 @@ describe("photoQueue", () => {
     expect(count).toBe(0);
     expect(await pendingPhotoUploads(tripId)).toHaveLength(1);
   });
+
+  it("stops at the first item on network failure without burning attempts", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new TypeError("Network request failed")),
+    );
+    await enqueuePhotoUpload(upload());
+    await enqueuePhotoUpload(upload({ photoId: "cd".repeat(16) }));
+    const count = await flushPhotoQueue();
+    expect(count).toBe(0);
+    const pending = await pendingPhotoUploads(tripId);
+    expect(pending).toHaveLength(2);
+    expect(pending.every((item) => (item.attempts ?? 0) === 0)).toBe(true);
+  });
+
+  it("continues past a permanently failing item and drops it after max attempts", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        calls += 1;
+        // First queued item always fails with a server rejection; the rest succeed.
+        if (calls % 2 === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ error: "bad photo" }), { status: 400 }));
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ photo: { id: "cd".repeat(16), createdAt: "t", displayUrl: "/x", thumbUrl: "/x", originalUrl: null } }),
+            { status: 201 },
+          ),
+        );
+      }),
+    );
+    await enqueuePhotoUpload(upload());
+    await enqueuePhotoUpload(upload({ photoId: "cd".repeat(16) }));
+
+    // First flush: item 1 fails (attempt 1), item 2 uploads.
+    expect(await flushPhotoQueue()).toBe(1);
+    let pending = await pendingPhotoUploads(tripId);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.attempts).toBe(1);
+
+    // Four more flushes exhaust the poisoned item's attempts; it is dropped.
+    for (let i = 0; i < 4; i++) {
+      await flushPhotoQueue();
+    }
+    pending = await pendingPhotoUploads(tripId);
+    expect(pending).toHaveLength(0);
+  });
 });

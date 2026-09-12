@@ -2,7 +2,7 @@ import { PHOTO_MAX_EDGE } from "../domain/photos";
 
 export type PickedPhoto = {
   display: { uri: string; name: string; type: string };
-  original: { uri: string; name: string; type: string; fileSize?: number };
+  original: { uri: string; name: string; type: string; fileSize?: number } | null;
 };
 
 export async function pickCompressedPhoto(): Promise<PickedPhoto | null> {
@@ -37,17 +37,45 @@ export async function pickCompressedPhoto(): Promise<PickedPhoto | null> {
     format: ImageManipulator.SaveFormat.JPEG,
   });
 
+  // The server accepts JPEG originals only. Keep real JPEGs untouched; convert
+  // anything else (HEIC, PNG, WebP) to a full-resolution JPEG so the upload
+  // can't fail and the original is still preserved.
+  const mime = asset.mimeType ?? "";
+  const looksJpeg =
+    mime === "image/jpeg" || mime === "image/jpg" || (!mime && /\.jpe?g$/i.test(asset.fileName ?? ""));
+  let original: PickedPhoto["original"] = null;
+  if (looksJpeg) {
+    original = {
+      uri: asset.uri,
+      name: asset.fileName || "original.jpg",
+      type: "image/jpeg",
+      fileSize: asset.fileSize,
+    };
+  } else {
+    try {
+      const converted = await ImageManipulator.manipulateAsync(asset.uri, [], {
+        compress: 0.95,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+      const { File } = await import("expo-file-system");
+      const size = new File(converted.uri).size;
+      original = {
+        uri: converted.uri,
+        name: "original.jpg",
+        type: "image/jpeg",
+        fileSize: typeof size === "number" ? size : undefined,
+      };
+    } catch {
+      original = null;
+    }
+  }
+
   return {
     display: {
       uri: compressed.uri,
       name: "photo.jpg",
       type: "image/jpeg",
     },
-    original: {
-      uri: asset.uri,
-      name: asset.fileName || "original.jpg",
-      type: asset.mimeType || "image/jpeg",
-      fileSize: asset.fileSize,
-    },
+    original,
   };
 }

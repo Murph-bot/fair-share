@@ -47,7 +47,7 @@ export interface R2BucketLike {
 
 export interface KVLike {
   get(key: string, type?: "json"): Promise<unknown>;
-  put(key: string, value: unknown, options?: { expirationTtl?: number }): Promise<void>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
   delete(key: string): Promise<void>;
 }
 

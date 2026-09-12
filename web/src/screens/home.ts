@@ -4,7 +4,7 @@ import { backupJson, parseBackup, parseTrip, t, TRIP_ID_RE, TRIP_TEMPLATES } fro
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
 import { savePhotoPin, savePhotoToken } from "../photo-session";
-import { loadRecents } from "../recents";
+import { loadRecents, rememberRecent } from "../recents";
 import { getTheme, languageButtonHtml, nextLanguage, themeButtonHtml, toggleTheme } from "../theme";
 
 function extractTripId(raw: string): string | null {
@@ -349,6 +349,9 @@ export function renderHome(root: HTMLElement): void {
       for (const trip of trips) {
         const remote = await createRemoteTrip(trip.name);
         await saveTrip(remote.id, trip);
+        savePhotoPin(remote.id, remote.pin);
+        savePhotoToken(remote.id, remote.photos_token);
+        rememberRecent(remote.id, trip.name);
         created.push(remote);
       }
       const first = created[0];

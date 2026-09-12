@@ -156,8 +156,8 @@ export async function fetchPhotos(tripId: string): Promise<PhotoRecord[]> {
   if (!res.ok) {
     throw new Error(await readError(res));
   }
-  const body = (await res.json()) as { photos: PhotoRecord[] };
-  return body.photos;
+  const body = (await res.json()) as { photos?: PhotoRecord[] };
+  return body.photos ?? [];
 }
 
 export async function uploadPhoto(

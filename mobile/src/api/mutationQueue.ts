@@ -4,10 +4,13 @@ import type { Trip } from "../domain";
 
 const QUEUE_KEY = "fairshare.mutation.queue";
 
+const MAX_ATTEMPTS = 5;
+
 export type QueuedMutation = {
   tripId: string;
   trip: Trip;
   timestamp: string;
+  attempts?: number;
 };
 
 function readQueue(raw: string | null): QueuedMutation[] {
@@ -74,9 +77,25 @@ export async function flushQueue(): Promise<void> {
     try {
       await saveTrip(item.tripId, item.trip);
       await dequeue(item.tripId, item.timestamp);
-    } catch {
-      /* stop at first failure and retry later */
-      break;
+    } catch (caught) {
+      // Network failure: everything behind this would fail too — retry later.
+      if (caught instanceof TypeError) {
+        break;
+      }
+      // A permanent failure (e.g. trip deleted remotely, validation error)
+      // must not block the rest of the queue forever. Retry a few times,
+      // then drop it so later mutations can sync.
+      const attempts = (item.attempts ?? 0) + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        await dequeue(item.tripId, item.timestamp);
+      } else {
+        const next = (await loadQueue()).map((queued) =>
+          queued.tripId === item.tripId && queued.timestamp === item.timestamp
+            ? { ...queued, attempts }
+            : queued,
+        );
+        await saveQueue(next);
+      }
     }
   }
 }

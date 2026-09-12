@@ -5,6 +5,7 @@ import type { PhotoRecord } from "../domain/photos";
 const INDEX_KEY = "fairshare.photo.cache.index";
 const LIST_KEY_PREFIX = "fairshare.photo.list.";
 const PHOTOS_DIR = "fairshare-photos";
+const QUEUE_DIR = "fairshare-queue";
 
 type CacheIndex = Record<string, string>;
 
@@ -16,6 +17,39 @@ function photosDirectory(): Directory {
     /* directory may already exist */
   }
   return dir;
+}
+
+function queueDirectory(): Directory {
+  // Document (not cache) storage so the OS cannot evict pending uploads.
+  const dir = new Directory(Paths.document, QUEUE_DIR);
+  try {
+    dir.create({ intermediates: true, idempotent: true });
+  } catch {
+    /* directory may already exist */
+  }
+  return dir;
+}
+
+/**
+ * Copies a picked photo into app-owned storage so a queued upload survives
+ * OS cache eviction. Returns the durable uri, or null if the copy failed.
+ */
+export async function stagePhotoForQueue(
+  photoId: string,
+  sourceUri: string,
+  kind: "display" | "original",
+): Promise<string | null> {
+  try {
+    const source = new File(sourceUri);
+    if (!source.exists) {
+      return null;
+    }
+    const target = new File(queueDirectory(), `${photoId}-${kind}.jpg`);
+    source.copy(target);
+    return target.uri;
+  } catch {
+    return null;
+  }
 }
 
 async function loadIndex(): Promise<CacheIndex> {

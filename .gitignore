@@ -9,7 +9,7 @@ venv/
 *.egg
 .pytest_cache/
 .ruff_cache/
-.coverage
+.coverage*
 htmlcov/
 *.pyc
 *.pyo
@@ -26,4 +26,5 @@ mobile/.expo/
 mobile/dist/
 mobile/ios/
 mobile/android/
+**/.claude/
 .netlify/

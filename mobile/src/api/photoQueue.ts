@@ -3,6 +3,8 @@ import { uploadPhoto } from "./photoApi";
 import type { PhotoPart } from "./photoApi";
 
 const QUEUE_KEY = "fairshare.photo.queue";
+const MAX_ATTEMPTS = 5;
+const STAGING_DIR_MARKER = "/fairshare-queue/";
 
 export type QueuedPhotoUpload = {
   tripId: string;
@@ -14,7 +16,38 @@ export type QueuedPhotoUpload = {
   originalName: string | null;
   originalType: string | null;
   createdAt: string;
+  attempts?: number;
 };
+
+// Staged uploads live under app-owned document storage (see photoCache
+// stagePhotoForQueue). If a staged file is gone the bytes are unrecoverable —
+// the item can never succeed, so it leaves the queue.
+async function stagedFileMissing(uri: string): Promise<boolean> {
+  if (!uri.includes(STAGING_DIR_MARKER)) {
+    return false;
+  }
+  try {
+    const { File } = await import("expo-file-system");
+    return !new File(uri).exists;
+  } catch {
+    return false;
+  }
+}
+
+async function cleanupStaged(uri: string | null): Promise<void> {
+  if (!uri || !uri.includes(STAGING_DIR_MARKER)) {
+    return;
+  }
+  try {
+    const { File } = await import("expo-file-system");
+    const file = new File(uri);
+    if (file.exists) {
+      file.delete();
+    }
+  } catch {
+    /* best-effort cleanup */
+  }
+}
 
 export async function loadPhotoQueue(): Promise<QueuedPhotoUpload[]> {
   try {
@@ -73,6 +106,11 @@ export async function flushPhotoQueue(): Promise<number> {
   }
   let uploaded = 0;
   for (const item of queue) {
+    if (await stagedFileMissing(item.displayUri)) {
+      await removePhotoUpload(item.tripId, item.photoId);
+      void cleanupStaged(item.originalUri);
+      continue;
+    }
     try {
       const display: PhotoPart = {
         uri: item.displayUri,
@@ -88,10 +126,29 @@ export async function flushPhotoQueue(): Promise<number> {
         : undefined;
       await uploadPhoto(item.tripId, display, { photoId: item.photoId, ...(original ? { original } : {}) });
       await removePhotoUpload(item.tripId, item.photoId);
+      void cleanupStaged(item.displayUri);
+      void cleanupStaged(item.originalUri);
       uploaded += 1;
-    } catch {
-      // Stop at the first failure; the rest retry on the next sync.
-      break;
+    } catch (caught) {
+      // Network failure: the rest would fail too — retry on the next sync.
+      if (caught instanceof TypeError) {
+        break;
+      }
+      // A permanent failure must not block the queue forever; after a few
+      // tries the item is dropped so later photos can sync.
+      const attempts = (item.attempts ?? 0) + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        await removePhotoUpload(item.tripId, item.photoId);
+        void cleanupStaged(item.displayUri);
+        void cleanupStaged(item.originalUri);
+      } else {
+        const next = (await loadPhotoQueue()).map((queued) =>
+          queued.tripId === item.tripId && queued.photoId === item.photoId
+            ? { ...queued, attempts }
+            : queued,
+        );
+        await savePhotoQueue(next);
+      }
     }
   }
   return uploaded;

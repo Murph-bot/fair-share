@@ -1,6 +1,11 @@
 import { PHOTO_MAX_EDGE } from "@fairshare/domain/photos";
 
-export async function compressImage(file: File): Promise<Blob> {
+export async function compressImage(
+  file: File,
+  options: { maxEdge?: number | null; quality?: number } = {},
+): Promise<Blob> {
+  const maxEdge = options.maxEdge === undefined ? PHOTO_MAX_EDGE : options.maxEdge;
+  const quality = options.quality ?? 0.82;
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file);
@@ -9,8 +14,8 @@ export async function compressImage(file: File): Promise<Blob> {
   }
 
   let { width, height } = bitmap;
-  if (width > PHOTO_MAX_EDGE || height > PHOTO_MAX_EDGE) {
-    const scale = PHOTO_MAX_EDGE / Math.max(width, height);
+  if (maxEdge !== null && (width > maxEdge || height > maxEdge)) {
+    const scale = maxEdge / Math.max(width, height);
     width = Math.round(width * scale);
     height = Math.round(height * scale);
   }
@@ -27,7 +32,7 @@ export async function compressImage(file: File): Promise<Blob> {
   bitmap.close();
 
   const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", 0.82);
+    canvas.toBlob(resolve, "image/jpeg", quality);
   });
   if (!blob) {
     throw new Error("Could not compress this photo");

@@ -117,7 +117,10 @@ export function makeFakeEnv(): {
       if (value === undefined) {
         return null;
       }
-      return type === "json" ? value : value;
+      if (type === "json" && typeof value === "string") {
+        return JSON.parse(value) as unknown;
+      }
+      return value;
     },
     async put(key, value) {
       pinAttempts.set(key, value);
