@@ -138,6 +138,7 @@ const el: Translations = {
   "Fair share": "Fair Share",
   "Copy PIN": "Αντιγραφή PIN",
   "Copy link": "Αντιγραφή συνδέσμου",
+  "More": "Περισσότερα",
   "Show QR": "Εμφάνιση QR",
   "Download JSON": "Λήψη JSON",
   "PIN copied": "Το PIN αντιγράφηκε",

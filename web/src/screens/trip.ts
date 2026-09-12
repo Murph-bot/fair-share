@@ -244,8 +244,9 @@ function settleBlock(trip: Trip): string {
         : `<button type="button" class="text-btn" data-record-payment data-from="${escapeHtml(p.frm)}" data-to="${escapeHtml(p.to)}" data-amount="${p.amount_cents}">${t("Mark as paid")}</button>` +
           `<button type="button" class="text-btn" data-partial-payment data-from="${escapeHtml(p.frm)}" data-to="${escapeHtml(p.to)}" data-amount="${p.amount_cents}">${t("Pay partial")}</button>`;
       return (
-        `<li class="${status.completed ? "completed" : ""}">${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${amountLabel}</strong>${progress}` +
-        `${shareButton}${recordAction}</li>`
+        `<li class="${status.completed ? "completed" : ""}">` +
+        `<span class="payment-line">${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${amountLabel}</strong>${progress}</span>` +
+        `<span class="payment-actions">${shareButton}${recordAction}</span></li>`
       );
     })
     .join("")}</ul>`;
@@ -418,18 +419,23 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   root.innerHTML = `
     <header class="topbar">
       <div>
-        <p class="kicker"><a href="/">${t("Fair Share")}</a></p>
+        <p class="kicker"><a href="/"><img src="/icon.svg" alt="" class="brand-mark">${t("Fair Share")}</a></p>
         <h1>${escapeHtml(trip.name)}</h1>
       </div>
       <div class="topbar-actions">
         <button type="button" id="copy-pin" ${hasPin ? "" : "hidden"} title="${t("Copy the 6-digit PIN for the trip photos")}">${t("Copy PIN")}</button>
         <button type="button" id="copy-link" title="${t("Copy the trip link to share")}">${t("Copy link")}</button>
-        <button type="button" id="show-qr" title="${t("Show a QR code for the trip link")}">${t("Show QR")}</button>
-        <button type="button" id="download-json" title="${t("Download the trip as a JSON file")}">${t("Download JSON")}</button>
-        <button type="button" id="archive-trip" title="${trip.archivedAt ? t("Unarchive this trip") : t("Archive this trip")}">${trip.archivedAt ? t("Unarchive") : t("Archive")}</button>
-        <button type="button" id="print-summary" title="${t("Print or save a summary of this trip")}">${t("Print summary")}</button>
-        <button type="button" id="share-summary" title="${t("Share a text summary of this trip")}">${t("Share summary")}</button>
-        <button type="button" id="delete-trip" title="${t("Delete this trip forever")}">${t("Delete")}</button>
+        <button type="button" id="show-qr" class="secondary" title="${t("Show a QR code for the trip link")}">${t("Show QR")}</button>
+        <details class="more-actions">
+          <summary>${t("More")}</summary>
+          <div class="more-menu">
+            <button type="button" id="download-json" title="${t("Download the trip as a JSON file")}">${t("Download JSON")}</button>
+            <button type="button" id="share-summary" title="${t("Share a text summary of this trip")}">${t("Share summary")}</button>
+            <button type="button" id="print-summary" title="${t("Print or save a summary of this trip")}">${t("Print summary")}</button>
+            <button type="button" id="archive-trip" title="${trip.archivedAt ? t("Unarchive this trip") : t("Archive this trip")}">${trip.archivedAt ? t("Unarchive") : t("Archive")}</button>
+            <button type="button" id="delete-trip" title="${t("Delete this trip forever")}">${t("Delete")}</button>
+          </div>
+        </details>
         ${languageButtonHtml()}
         ${themeButtonHtml(themeLabel)}
       </div>

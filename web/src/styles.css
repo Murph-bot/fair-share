@@ -147,10 +147,94 @@ a {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
+  align-items: center;
 }
 
 .topbar h1 {
   font-size: 1.35rem;
+}
+
+.brand-mark {
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.15em;
+  margin-right: 0.45em;
+  border-radius: 3px;
+}
+
+.more-actions {
+  position: relative;
+}
+
+.more-actions > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.55rem 0.7rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--brown);
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  font: inherit;
+}
+
+.more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-actions > summary::after {
+  content: "▾";
+  margin-left: 0.45rem;
+  font-size: 0.75em;
+  color: var(--brown);
+}
+
+.more-actions[open] > summary,
+.more-actions > summary:hover {
+  background: var(--cream);
+}
+
+.more-actions > summary:focus-visible {
+  outline: 3px solid var(--brown);
+  outline-offset: 2px;
+}
+
+.more-actions .more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 6px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(42, 28, 20, 0.16);
+}
+
+.more-menu button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--ink);
+  border: none;
+  border-radius: 8px;
+  min-height: 40px;
+  padding: 0.5rem 0.6rem;
+}
+
+.more-menu button:hover:not(:disabled) {
+  background: var(--cream);
+}
+
+.more-menu #delete-trip {
+  color: var(--neg);
 }
 
 .moments-grid {
@@ -493,6 +577,34 @@ fieldset {
   border-bottom: 1px solid var(--rule);
 }
 
+.payments li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.15rem 0.75rem;
+}
+
+.payment-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.6rem;
+}
+
+.payment-actions .text-btn {
+  min-height: 36px;
+}
+
+.payments li.completed .payment-line {
+  color: var(--brown);
+}
+
+.payments li.completed .payment-line::after {
+  content: "✓";
+  color: var(--pos);
+  margin-left: 0.35rem;
+}
+
 .recents li {
   margin-bottom: 0.45rem;
   border: 1px solid var(--rule);
@@ -568,8 +680,14 @@ fieldset {
     align-self: flex-start;
   }
 
+  .topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
   .topbar-actions {
-    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 

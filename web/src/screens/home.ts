@@ -1,4 +1,11 @@
-import { createRemoteDemoTrip, createRemoteTemplateTrip, createRemoteTrip, fetchTrip, saveTrip } from "../api";
+import {
+  createRemoteDemoTrip,
+  createRemoteTemplateTrip,
+  createRemoteTrip,
+  fetchTrip,
+  saveTrip,
+  type PublicTrip,
+} from "../api";
 import { getInstallPrompt, isStandalone, runInstallPrompt } from "../install";
 import { backupJson, parseBackup, parseTrip, t, TRIP_ID_RE, TRIP_TEMPLATES } from "@fairshare/domain";
 import { announce } from "../announce";
@@ -57,7 +64,7 @@ export function renderHome(root: HTMLElement): void {
   root.innerHTML = `
     <main class="page home">
       <div class="home-header">
-        <p class="kicker">${t("Fair Share")}</p>
+        <p class="kicker"><img src="/icon.svg" alt="" class="brand-mark">${t("Fair Share")}</p>
         <div class="home-toggles">
           ${languageButtonHtml()}
           ${themeButtonHtml(themeLabel)}
@@ -96,7 +103,7 @@ export function renderHome(root: HTMLElement): void {
         <h2>${t("Open an existing trip")}</h2>
         <form id="open-form" class="row">
           <label class="sr" for="trip-link">${t("Trip link or ID")}</label>
-          <input id="trip-link" name="link" type="text" inputmode="url" autocomplete="off" placeholder="https://fair-share-trips.netlify.app/t/…">
+          <input id="trip-link" name="link" type="text" inputmode="url" autocomplete="off" placeholder="https://fair-share-trips.pages.dev/t/…">
           <button type="submit" class="secondary">${t("Open trip")}</button>
         </form>
         <p id="open-error" class="err" hidden></p>
@@ -302,12 +309,10 @@ export function renderHome(root: HTMLElement): void {
     }
     setBusy(true);
     try {
-      const trips = await Promise.all(
-        loadRecents().map(async (recent) => {
-          const trip = await fetchTrip(recent.id);
-          return trip;
-        }),
-      );
+      const settled = await Promise.allSettled(loadRecents().map((recent) => fetchTrip(recent.id)));
+      const trips = settled
+        .filter((result): result is PromiseFulfilledResult<PublicTrip> => result.status === "fulfilled")
+        .map((result) => result.value);
       if (trips.length === 0) {
         throw new Error(t("No trips on this device to back up"));
       }
