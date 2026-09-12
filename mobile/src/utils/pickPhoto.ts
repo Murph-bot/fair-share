@@ -1,9 +1,8 @@
 import { PHOTO_MAX_EDGE } from "../domain/photos";
-import type { PhotoPart } from "../api/photoApi";
 
 export type PickedPhoto = {
-  display: PhotoPart & { uri: string };
-  original: PhotoPart & { uri: string; fileSize?: number };
+  display: { uri: string; name: string; type: string };
+  original: { uri: string; name: string; type: string; fileSize?: number };
 };
 
 export async function pickCompressedPhoto(): Promise<PickedPhoto | null> {

@@ -122,6 +122,8 @@ const el: Translations = {
   "Delete trip?": "Διαγραφή ταξιδιού;",
   "This cannot be undone.": "Αυτό δεν αναιρείται.",
   "You are offline. Changes are saved locally and will sync when you are back online.": "Είσαι offline. Οι αλλαγές αποθηκεύονται τοπικά και θα συγχρονιστούν όταν είσαι ξανά online.",
+  "You're offline — showing saved data.": "Είσαι εκτός σύνδεσης — εμφανίζονται αποθηκευμένα δεδομένα.",
+  "Pending upload": "Εκκρεμής μεταφόρτωση",
   "Sync now": "Συγχρονισμός τώρα",
   "Demo trip": "Demo ταξίδι",
   "Taxi": "Ταξί",

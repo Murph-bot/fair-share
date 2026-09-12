@@ -4,6 +4,7 @@ import { fetchTrip, saveTrip } from "../api/tripApi";
 import { enqueue, flushQueue, hasQueued } from "../api/mutationQueue";
 import { isOnline } from "../api/networkStatus";
 import { saveRecentTrip } from "../api/recentTrips";
+import { getStore } from "../api/storage";
 import type { Trip } from "../domain";
 import type { PublicTrip } from "../domain/photos";
 
@@ -13,6 +14,7 @@ export type UseTripResult = {
   saving: boolean;
   error: string | null;
   queued: boolean;
+  offline: boolean;
   reload: () => Promise<void>;
   mutate: (transform: (trip: Trip) => Trip) => Promise<boolean>;
   flush: () => Promise<void>;
@@ -22,11 +24,37 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong";
 }
 
+function snapshotKey(tripId: string): string {
+  return `fairshare.trip.snapshot.${tripId}`;
+}
+
+async function saveSnapshot(tripId: string, trip: PublicTrip): Promise<void> {
+  try {
+    await getStore().setItem(snapshotKey(tripId), JSON.stringify(trip));
+  } catch {
+    /* snapshots are optional */
+  }
+}
+
+async function loadSnapshot(tripId: string): Promise<PublicTrip | null> {
+  try {
+    const raw = await getStore().getItem(snapshotKey(tripId));
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === "object" && parsed !== null ? (parsed as PublicTrip) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useTrip(tripId: string | null): UseTripResult {
   const [trip, setTrip] = useState<PublicTrip | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [queued, setQueued] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tripRef = useRef<PublicTrip | null>(null);
   const savingRef = useRef(false);
@@ -51,10 +79,20 @@ export function useTrip(tripId: string | null): UseTripResult {
       const nextTrip = await fetchTrip(tripId);
       tripRef.current = nextTrip;
       setTrip(nextTrip);
+      setOffline(false);
+      void saveSnapshot(tripId, nextTrip);
       void saveRecentTrip(tripId, nextTrip.name);
     } catch (caught) {
-      setError(errorMessage(caught));
-      setTrip(null);
+      const snapshot = await loadSnapshot(tripId);
+      if (snapshot) {
+        tripRef.current = snapshot;
+        setTrip(snapshot);
+        setOffline(true);
+        setError(null);
+      } else {
+        setError(errorMessage(caught));
+        setTrip(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -92,11 +130,15 @@ export function useTrip(tripId: string | null): UseTripResult {
           tripRef.current = nextTrip as PublicTrip;
           setTrip(nextTrip as PublicTrip);
           setQueued(true);
+          setOffline(true);
+          void saveSnapshot(tripId, nextTrip as PublicTrip);
           return true;
         }
         const savedTrip = await saveTrip(tripId, nextTrip);
         tripRef.current = savedTrip;
         setTrip(savedTrip);
+        setOffline(false);
+        void saveSnapshot(tripId, savedTrip);
         return true;
       } catch (caught) {
         setError(errorMessage(caught));
@@ -128,6 +170,7 @@ export function useTrip(tripId: string | null): UseTripResult {
     saving,
     error,
     queued,
+    offline,
     reload,
     mutate,
     flush,

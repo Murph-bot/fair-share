@@ -26,6 +26,7 @@ import {
 } from "@fairshare/domain";
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
+import { onOfflineChange } from "../offline";
 import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
 import { bindMoments, momentsSection } from "./moments";
@@ -434,6 +435,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       </div>
     </header>
     <p id="banner" class="err" role="alert" aria-live="assertive" hidden></p>
+    <p id="offline-banner" class="offline-banner" hidden>${t("You're offline — showing saved data.")}</p>
     <main class="page trip">
       <section class="block">
         <h2>${t("People")}</h2>
@@ -873,6 +875,13 @@ export async function renderTrip(root: HTMLElement, id: string): Promise<void> {
     const trip = await fetchTrip(id);
     rememberRecent(id, trip.name);
     paint(root, id, trip);
+    const offlineBanner = root.querySelector("#offline-banner") as HTMLElement | null;
+    if (offlineBanner) {
+      const unsubscribe = onOfflineChange((offline) => {
+        offlineBanner.hidden = !offline;
+      });
+      window.addEventListener("fairshare:route", unsubscribe, { once: true });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : t("Trip not found");
     root.innerHTML = `

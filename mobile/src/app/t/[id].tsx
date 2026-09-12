@@ -201,7 +201,7 @@ export default function TripScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const tripId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
-  const { trip, loading, saving, error, queued, reload, mutate, flush } = useTrip(tripId);
+  const { trip, loading, saving, error, queued, offline, reload, mutate, flush } = useTrip(tripId);
   const [personName, setPersonName] = useState("");
   const [personError, setPersonError] = useState<string | null>(null);
   const [editingPerson, setEditingPerson] = useState<{ old: string; draft: string } | null>(null);
@@ -720,9 +720,13 @@ export default function TripScreen() {
           </Pressable>
         </View>
 
-        {queued ? (
+        {queued || offline ? (
           <View style={styles.offlineBanner}>
-            <Text style={styles.offlineBannerText}>{t("You are offline. Changes are saved locally and will sync when you are back online.")}</Text>
+            <Text style={styles.offlineBannerText}>
+              {offline && !queued
+                ? t("You're offline — showing saved data.")
+                : t("You are offline. Changes are saved locally and will sync when you are back online.")}
+            </Text>
             <StepButton styles={styles} label={t("Sync now")} onPress={() => void flush()} />
           </View>
         ) : null}

@@ -11,6 +11,7 @@ import {
   useColorScheme,
   View,
 } from "react-native";
+import { addNetworkStateListener } from "expo-network";
 
 import {
   deletePhoto,
@@ -19,6 +20,15 @@ import {
   unlockPhotos,
   uploadPhoto,
 } from "../api/photoApi";
+import {
+  cachePhoto,
+  cachedPhotoUri,
+  loadPhotoList,
+  removeCachedPhoto,
+  savePhotoList,
+} from "../api/photoCache";
+import { enqueuePhotoUpload, flushPhotoQueue, pendingPhotoUploads, removePhotoUpload } from "../api/photoQueue";
+import { isOnline } from "../api/networkStatus";
 import { MAX_ORIGINAL_BYTES } from "../../../packages/domain/src/photos";
 import { loadPhotoToken } from "../api/photoSession";
 import type { PhotoRecord, PublicTrip } from "../domain/photos";
@@ -32,6 +42,14 @@ type MomentsProps = {
   trip: PublicTrip;
   onTripLocked?: (pin: string) => void;
 };
+
+function newPhotoId(): string {
+  let hex = "";
+  for (let i = 0; i < 32; i++) {
+    hex += Math.floor(Math.random() * 16).toString(16);
+  }
+  return hex;
+}
 
 function makeStyles(colors: ColorTheme) {
   return StyleSheet.create({
@@ -105,6 +123,11 @@ function makeStyles(colors: ColorTheme) {
       color: colors.negative,
       fontWeight: "700",
     },
+    pending: {
+      color: colors.tint,
+      fontWeight: "700",
+      fontSize: 12,
+    },
   });
 }
 
@@ -112,6 +135,8 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   const { t } = useTranslation();
   const [hasToken, setHasToken] = useState(false);
   const [photos, setPhotos] = useState<PhotoRecord[]>([]);
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [cachedUris, setCachedUris] = useState<Record<string, string | null>>({});
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -123,10 +148,28 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   const access = photoAccessState(trip.photos_locked, hasToken);
   const offerLock = shouldOfferLockCta(trip.photos_locked);
 
-  const refresh = useCallback(async () => {
+  const syncPhotos = useCallback(async () => {
     setError(null);
-    const photosList = await fetchPhotos(tripId);
-    setPhotos(photosList);
+    const online = await isOnline();
+    let list: PhotoRecord[];
+    const uris: Record<string, string | null> = {};
+    if (online) {
+      await flushPhotoQueue();
+      list = await fetchPhotos(tripId);
+      await savePhotoList(tripId, list);
+      for (const photo of list) {
+        uris[photo.id] = await cachePhoto(tripId, photo);
+      }
+    } else {
+      list = (await loadPhotoList(tripId)) ?? [];
+      for (const photo of list) {
+        uris[photo.id] = await cachedPhotoUri(tripId, photo.id);
+      }
+    }
+    setPhotos(list);
+    setCachedUris(uris);
+    const pending = await pendingPhotoUploads(tripId);
+    setPendingIds(pending.map((item) => item.photoId));
   }, [tripId]);
 
   useEffect(() => {
@@ -140,7 +183,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       setReady(true);
       if (photoAccessState(trip.photos_locked, Boolean(token)) === "unlocked") {
         try {
-          await refresh();
+          await syncPhotos();
         } catch (caught) {
           if (!cancelled) {
             setError(caught instanceof Error ? caught.message : t("Could not load photos"));
@@ -151,7 +194,21 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
     return () => {
       cancelled = true;
     };
-  }, [refresh, trip.photos_locked, tripId]);
+  }, [syncPhotos, trip.photos_locked, tripId, t]);
+
+  // Auto-sync when connectivity returns.
+  useEffect(() => {
+    const subscription = addNetworkStateListener((state) => {
+      if (state.isConnected && state.isInternetReachable) {
+        void syncPhotos().catch(() => {
+          /* next reconnect retries */
+        });
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [syncPhotos]);
 
   const handleUnlock = async () => {
     setBusy(true);
@@ -160,7 +217,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       await unlockPhotos(tripId, pin.trim());
       setHasToken(true);
       setPin("");
-      await refresh();
+      await syncPhotos();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("Could not unlock photos"));
     } finally {
@@ -182,7 +239,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       setPin("");
       onTripLocked?.(result.pin);
       Alert.alert(t("Photos locked"), t("Save this PIN: {{pin}}", { pin: result.pin }));
-      await refresh();
+      await syncPhotos();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("Could not lock photos"));
     } finally {
@@ -198,11 +255,28 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       if (!picked) {
         return;
       }
-      const originalSize = picked.original.fileSize ?? 0;
-      const extras =
-        originalSize > 0 && originalSize <= MAX_ORIGINAL_BYTES ? { original: picked.original } : undefined;
-      await uploadPhoto(tripId, picked.display, extras);
-      await refresh();
+      if (!(await isOnline())) {
+        // Offline: queue locally, it syncs when connectivity returns.
+        await enqueuePhotoUpload({
+          tripId,
+          photoId: newPhotoId(),
+          displayUri: picked.display.uri,
+          displayName: picked.display.name,
+          displayType: picked.display.type,
+          originalUri: picked.original.uri,
+          originalName: picked.original.name,
+          originalType: picked.original.type,
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        const originalSize = picked.original.fileSize ?? 0;
+        const extras =
+          originalSize > 0 && originalSize <= MAX_ORIGINAL_BYTES
+            ? { original: picked.original }
+            : undefined;
+        await uploadPhoto(tripId, picked.display, extras);
+      }
+      await syncPhotos();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("Could not upload photo"));
     } finally {
@@ -221,8 +295,10 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
             setBusy(true);
             setError(null);
             try {
+              await removePhotoUpload(tripId, photo.id);
+              await removeCachedPhoto(tripId, photo.id);
               await deletePhoto(tripId, photo.id);
-              await refresh();
+              await syncPhotos();
             } catch (caught) {
               setError(caught instanceof Error ? caught.message : t("Could not delete photo"));
             } finally {
@@ -285,35 +361,39 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       {busy ? <ActivityIndicator color={colors.tint} /> : null}
       {photos.length === 0 ? <Text style={styles.muted}>{t("No photos yet. Add one above.")}</Text> : null}
       <View style={styles.grid}>
-        {photos.map((photo, index) => (
-          <View key={photo.id} style={styles.tile}>
-            <Image
-              source={{ uri: photo.thumbUrl }}
-              style={styles.thumb}
-              accessibilityRole="image"
-              accessibilityLabel={t("Photo {{index}} of {{total}} from {{trip}}", { index: String(index + 1), total: String(photos.length), trip: trip.name })}
-            />
-            <View style={styles.tileActions}>
-              {photo.originalUrl?.startsWith("https://") ? (
+        {photos.map((photo, index) => {
+          const pending = pendingIds.includes(photo.id);
+          return (
+            <View key={photo.id} style={styles.tile}>
+              <Image
+                source={{ uri: cachedUris[photo.id] ?? photo.thumbUrl }}
+                style={styles.thumb}
+                accessibilityRole="image"
+                accessibilityLabel={t("Photo {{index}} of {{total}} from {{trip}}", { index: String(index + 1), total: String(photos.length), trip: trip.name })}
+              />
+              {pending ? <Text style={styles.pending}>{t("Pending upload")}</Text> : null}
+              <View style={styles.tileActions}>
+                {photo.originalUrl?.startsWith("https://") ? (
+                  <Pressable
+                    onPress={() => void Linking.openURL(photo.originalUrl as string)}
+                    accessibilityRole="link"
+                    accessibilityLabel={t("Open original photo")}
+                  >
+                    <Text style={styles.link}>{t("Original")}</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
-                  onPress={() => void Linking.openURL(photo.originalUrl as string)}
-                  accessibilityRole="link"
-                  accessibilityLabel={t("Open original photo")}
+                  onPress={() => handleDelete(photo)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("Delete photo")}
+                  accessibilityHint={t("Removes this photo from the trip")}
                 >
-                  <Text style={styles.link}>{t("Original")}</Text>
+                  <Text style={styles.danger}>{t("Delete")}</Text>
                 </Pressable>
-              ) : null}
-              <Pressable
-                onPress={() => handleDelete(photo)}
-                accessibilityRole="button"
-                accessibilityLabel={t("Delete photo")}
-                accessibilityHint={t("Removes this photo from the trip")}
-              >
-                <Text style={styles.danger}>{t("Delete")}</Text>
-              </Pressable>
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </View>
   );
