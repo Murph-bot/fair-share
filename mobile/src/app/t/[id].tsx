@@ -40,7 +40,8 @@ import {
   type NewExpenseInput,
   type Trip,
 } from "../../domain";
-import { loadPhotoPin } from "../../api/photoSession";
+import { clearPhotoPin, clearPhotoToken, loadPhotoPin } from "../../api/photoSession";
+import { removeRecentTrip } from "../../api/recentTrips";
 import { deleteRemoteTrip } from "../../api/tripApi";
 import { apiBaseUrl } from "../../api/client";
 import { Moments } from "../../components/moments";
@@ -432,9 +433,17 @@ export default function TripScreen() {
           if (!tripId) {
             return;
           }
-          void deleteRemoteTrip(tripId).then(() => {
-            router.replace("/");
-          });
+          void deleteRemoteTrip(tripId)
+            .then(async () => {
+              await Promise.all([
+                removeRecentTrip(tripId),
+                clearPhotoToken(tripId),
+                clearPhotoPin(tripId),
+              ]);
+            })
+            .then(() => {
+              router.replace("/");
+            });
         },
       },
     ]);
@@ -594,10 +603,10 @@ export default function TripScreen() {
         ...(expenseDraft.currency !== trip.currency && expenseDraft.exchangeRate.trim()
           ? { exchange_rate: expenseDraft.exchangeRate.trim() }
           : {}),
-        ...(expenseDraft.tax.trim() && Number(expenseDraft.tax) > 0
+        ...(expenseDraft.tax.trim() && Number(expenseDraft.tax.replace(",", ".")) > 0
           ? { tax_cents: parseAmount(expenseDraft.tax) }
           : {}),
-        ...(expenseDraft.tip.trim() && Number(expenseDraft.tip) > 0
+        ...(expenseDraft.tip.trim() && Number(expenseDraft.tip.replace(",", ".")) > 0
           ? { tip_cents: parseAmount(expenseDraft.tip) }
           : {}),
       };

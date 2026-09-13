@@ -1,8 +1,15 @@
-import { createExampleTrip, createTripFromTemplate, type Trip } from "@fairshare/domain";
+import { createExampleTrip, createTripFromTemplate, parseTrip, type Trip } from "@fairshare/domain";
 import type { PhotoRecord } from "@fairshare/domain/photos";
 import { loadPhotoToken } from "./photo-session";
 
 export type PublicTrip = Trip & { photos_locked?: boolean };
+
+function asPublicTrip(raw: unknown): PublicTrip {
+  const trip = parseTrip(raw);
+  const photosLocked =
+    typeof raw === "object" && raw !== null && (raw as { photos_locked?: unknown }).photos_locked === true;
+  return { ...trip, photos_locked: photosLocked };
+}
 
 async function readError(res: Response): Promise<string> {
   try {
@@ -40,14 +47,14 @@ export async function createRemoteTrip(name: string): Promise<{
   }
   const body = (await res.json()) as {
     id: string;
-    trip: PublicTrip;
+    trip: unknown;
     pin?: unknown;
     photos_token?: unknown;
   };
   if (typeof body.id !== "string" || typeof body.pin !== "string" || typeof body.photos_token !== "string") {
     throw new Error("Could not create trip");
   }
-  return { id: body.id, trip: body.trip, pin: body.pin, photos_token: body.photos_token };
+  return { id: body.id, trip: asPublicTrip(body.trip), pin: body.pin, photos_token: body.photos_token };
 }
 
 export async function fetchTrip(id: string): Promise<PublicTrip> {
@@ -55,7 +62,7 @@ export async function fetchTrip(id: string): Promise<PublicTrip> {
   if (!res.ok) {
     throw new Error(await readError(res));
   }
-  return (await res.json()) as PublicTrip;
+  return asPublicTrip(await res.json());
 }
 
 export async function createRemoteDemoTrip(name: string): Promise<{
@@ -130,7 +137,7 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
   if (!res.ok) {
     throw new Error(await readError(res));
   }
-  return (await res.json()) as PublicTrip;
+  return asPublicTrip(await res.json());
 }
 
 export async function unlockPhotos(tripId: string, pin: string): Promise<string> {
@@ -157,7 +164,7 @@ export async function fetchPhotos(tripId: string): Promise<PhotoRecord[]> {
     throw new Error(await readError(res));
   }
   const body = (await res.json()) as { photos?: PhotoRecord[] };
-  return body.photos ?? [];
+  return Array.isArray(body.photos) ? body.photos : [];
 }
 
 export async function uploadPhoto(
@@ -181,7 +188,10 @@ export async function uploadPhoto(
   if (!res.ok) {
     throw new Error(await readError(res));
   }
-  const body = (await res.json()) as { photo: PhotoRecord };
+  const body = (await res.json()) as { photo?: PhotoRecord };
+  if (!body.photo || typeof body.photo.id !== "string") {
+    throw new Error("Could not upload photo");
+  }
   return body.photo;
 }
 

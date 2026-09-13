@@ -28,7 +28,14 @@ import {
   savePhotoList,
   stagePhotoForQueue,
 } from "../api/photoCache";
-import { enqueuePhotoUpload, flushPhotoQueue, pendingPhotoUploads, removePhotoUpload } from "../api/photoQueue";
+import {
+  discardPhotoUpload,
+  enqueuePhotoUpload,
+  flushPhotoQueue,
+  pendingPhotoUploads,
+  removePhotoUpload,
+  type QueuedPhotoUpload,
+} from "../api/photoQueue";
 import { isOnline } from "../api/networkStatus";
 import { MAX_ORIGINAL_BYTES } from "../../../packages/domain/src/photos";
 import { loadPhotoToken } from "../api/photoSession";
@@ -136,7 +143,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
   const { t } = useTranslation();
   const [hasToken, setHasToken] = useState(false);
   const [photos, setPhotos] = useState<PhotoRecord[]>([]);
-  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<QueuedPhotoUpload[]>([]);
   const [cachedUris, setCachedUris] = useState<Record<string, string | null>>({});
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -169,8 +176,7 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
     }
     setPhotos(list);
     setCachedUris(uris);
-    const pending = await pendingPhotoUploads(tripId);
-    setPendingIds(pending.map((item) => item.photoId));
+    setPendingUploads(await pendingPhotoUploads(tripId));
   }, [tripId]);
 
   useEffect(() => {
@@ -327,6 +333,32 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
     ]);
   };
 
+  // A pending upload was never sent — discard removes the queue entry and
+  // staged files; there is nothing to delete server-side.
+  const handleDiscardPending = (item: QueuedPhotoUpload) => {
+    Alert.alert(t("Discard this pending photo?"), undefined, [
+      { text: t("Cancel"), style: "cancel" },
+      {
+        text: t("Discard"),
+        style: "destructive",
+        onPress: () => {
+          void (async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await discardPhotoUpload(tripId, item.photoId);
+              await syncPhotos();
+            } catch (caught) {
+              setError(caught instanceof Error ? caught.message : t("Could not delete photo"));
+            } finally {
+              setBusy(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
   if (!ready) {
     return <Text style={styles.muted}>{t("Loading photos…")}</Text>;
   }
@@ -376,10 +408,32 @@ export function Moments({ tripId, trip, onTripLocked }: MomentsProps) {
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {busy ? <ActivityIndicator color={colors.tint} /> : null}
-      {photos.length === 0 ? <Text style={styles.muted}>{t("No photos yet. Add one above.")}</Text> : null}
+      {photos.length === 0 && pendingUploads.length === 0 ? (
+        <Text style={styles.muted}>{t("No photos yet. Add one above.")}</Text>
+      ) : null}
       <View style={styles.grid}>
+        {pendingUploads.map((item) => (
+          <View key={item.photoId} style={styles.tile}>
+            <Image
+              source={{ uri: item.displayUri }}
+              style={styles.thumb}
+              accessibilityRole="image"
+              accessibilityLabel={t("Photo waiting to upload")}
+            />
+            <Text style={styles.pending}>{t("Pending upload")}</Text>
+            <View style={styles.tileActions}>
+              <Pressable
+                onPress={() => handleDiscardPending(item)}
+                accessibilityRole="button"
+                accessibilityLabel={t("Discard pending photo")}
+              >
+                <Text style={styles.danger}>{t("Discard")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
         {photos.map((photo, index) => {
-          const pending = pendingIds.includes(photo.id);
+          const pending = pendingUploads.some((item) => item.photoId === photo.id);
           return (
             <View key={photo.id} style={styles.tile}>
               <Image

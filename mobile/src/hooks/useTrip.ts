@@ -4,7 +4,7 @@ import { fetchTrip, saveTrip } from "../api/tripApi";
 import { enqueue, flushQueue, hasQueued } from "../api/mutationQueue";
 import { isOnline } from "../api/networkStatus";
 import { saveRecentTrip } from "../api/recentTrips";
-import { getStore } from "../api/storage";
+import { getDataStore } from "../api/storage";
 import type { Trip } from "../domain";
 import type { PublicTrip } from "../domain/photos";
 
@@ -30,7 +30,7 @@ function snapshotKey(tripId: string): string {
 
 async function saveSnapshot(tripId: string, trip: PublicTrip): Promise<void> {
   try {
-    await getStore().setItem(snapshotKey(tripId), JSON.stringify(trip));
+    await getDataStore().setItem(snapshotKey(tripId), JSON.stringify(trip));
   } catch {
     /* snapshots are optional */
   }
@@ -38,7 +38,7 @@ async function saveSnapshot(tripId: string, trip: PublicTrip): Promise<void> {
 
 async function loadSnapshot(tripId: string): Promise<PublicTrip | null> {
   try {
-    const raw = await getStore().getItem(snapshotKey(tripId));
+    const raw = await getDataStore().getItem(snapshotKey(tripId));
     if (!raw) {
       return null;
     }

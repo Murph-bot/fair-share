@@ -1,4 +1,4 @@
-import { getStore } from "./storage";
+import { getDataStore } from "./storage";
 
 const RECENT_TRIPS_KEY = "fairshare.recent.trips";
 const MAX_RECENTS = 10;
@@ -31,7 +31,7 @@ function readRecents(raw: string | null): RecentTrip[] {
 
 export async function loadRecentTrips(): Promise<RecentTrip[]> {
   try {
-    const raw = await getStore().getItem(RECENT_TRIPS_KEY);
+    const raw = await getDataStore().getItem(RECENT_TRIPS_KEY);
     return readRecents(raw);
   } catch {
     return [];
@@ -46,7 +46,7 @@ export async function saveRecentTrip(id: string, name: string): Promise<void> {
     if (next.length > MAX_RECENTS) {
       next.length = MAX_RECENTS;
     }
-    await getStore().setItem(RECENT_TRIPS_KEY, JSON.stringify(next));
+    await getDataStore().setItem(RECENT_TRIPS_KEY, JSON.stringify(next));
   } catch {
     /* ignore */
   }
@@ -56,7 +56,7 @@ export async function removeRecentTrip(id: string): Promise<void> {
   try {
     const recents = await loadRecentTrips();
     const next = recents.filter((trip) => trip.id !== id);
-    await getStore().setItem(RECENT_TRIPS_KEY, JSON.stringify(next));
+    await getDataStore().setItem(RECENT_TRIPS_KEY, JSON.stringify(next));
   } catch {
     /* ignore */
   }

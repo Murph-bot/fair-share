@@ -26,7 +26,7 @@ import {
 } from "@fairshare/domain";
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
-import { onOfflineChange } from "../offline";
+import { isOffline, onOfflineChange } from "../offline";
 import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
 import { bindMoments, momentsSection } from "./moments";
@@ -789,8 +789,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         note: rawNote ? rawNote : undefined,
         currency: expenseCurrency === tripCurrency ? undefined : expenseCurrency,
         exchange_rate: expenseCurrency === tripCurrency || !rawRate ? undefined : rawRate,
-        tax_cents: rawTax && Number(rawTax) > 0 ? parseAmount(rawTax) : undefined,
-        tip_cents: rawTip && Number(rawTip) > 0 ? parseAmount(rawTip) : undefined,
+        tax_cents: rawTax && Number(rawTax.replace(",", ".")) > 0 ? parseAmount(rawTax) : undefined,
+        tip_cents: rawTip && Number(rawTip.replace(",", ".")) > 0 ? parseAmount(rawTip) : undefined,
       };
       const editingExpenseId = expenseFormEl.dataset.editing;
       const next = editingExpenseId
@@ -872,6 +872,12 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     });
   });
 
+  const offlineBanner = root.querySelector("#offline-banner") as HTMLElement | null;
+  if (offlineBanner) {
+    // paint() rebuilt the banner markup — restore live state on the new node.
+    offlineBanner.hidden = !isOffline();
+  }
+
   bindMoments(root, id, trip);
 }
 
@@ -881,13 +887,14 @@ export async function renderTrip(root: HTMLElement, id: string): Promise<void> {
     const trip = await fetchTrip(id);
     rememberRecent(id, trip.name);
     paint(root, id, trip);
-    const offlineBanner = root.querySelector("#offline-banner") as HTMLElement | null;
-    if (offlineBanner) {
-      const unsubscribe = onOfflineChange((offline) => {
-        offlineBanner.hidden = !offline;
-      });
-      window.addEventListener("fairshare:route", unsubscribe, { once: true });
-    }
+    const unsubscribe = onOfflineChange((offline) => {
+      // paint() replaces the banner node — always query the live one.
+      const banner = root.querySelector("#offline-banner") as HTMLElement | null;
+      if (banner) {
+        banner.hidden = !offline;
+      }
+    });
+    window.addEventListener("fairshare:route", unsubscribe, { once: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : t("Trip not found");
     root.innerHTML = `

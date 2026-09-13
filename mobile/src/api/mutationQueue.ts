@@ -1,4 +1,4 @@
-import { getStore } from "./storage";
+import { getDataStore } from "./storage";
 import { saveTrip } from "./tripApi";
 import type { Trip } from "../domain";
 
@@ -36,7 +36,7 @@ function readQueue(raw: string | null): QueuedMutation[] {
 
 export async function loadQueue(): Promise<QueuedMutation[]> {
   try {
-    const raw = await getStore().getItem(QUEUE_KEY);
+    const raw = await getDataStore().getItem(QUEUE_KEY);
     return readQueue(raw);
   } catch {
     return [];
@@ -45,7 +45,7 @@ export async function loadQueue(): Promise<QueuedMutation[]> {
 
 export async function saveQueue(queue: QueuedMutation[]): Promise<void> {
   try {
-    await getStore().setItem(QUEUE_KEY, JSON.stringify(queue));
+    await getDataStore().setItem(QUEUE_KEY, JSON.stringify(queue));
   } catch {
     /* ignore */
   }

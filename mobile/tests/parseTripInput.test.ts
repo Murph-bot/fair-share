@@ -8,6 +8,13 @@ describe("parseTripInput", () => {
     expect(result).toEqual({ ok: true, id: "ff4765be974564a2503e8f94f67538dd" });
   });
 
+  it("accepts an uppercase trip id", () => {
+    expect(parseTripInput("FF4765BE974564A2503E8F94F67538DD")).toEqual({
+      ok: true,
+      id: "ff4765be974564a2503e8f94f67538dd",
+    });
+  });
+
   it("accepts web links and deep links", () => {
     expect(parseTripInput("https://fair-share-trips.pages.dev/t/ff4765be974564a2503e8f94f67538dd")).toEqual({
       ok: true,

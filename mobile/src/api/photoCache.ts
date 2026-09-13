@@ -1,5 +1,5 @@
 import { Directory, File, Paths } from "expo-file-system";
-import { getStore } from "./storage";
+import { getDataStore } from "./storage";
 import type { PhotoRecord } from "../domain/photos";
 
 const INDEX_KEY = "fairshare.photo.cache.index";
@@ -45,7 +45,7 @@ export async function stagePhotoForQueue(
       return null;
     }
     const target = new File(queueDirectory(), `${photoId}-${kind}.jpg`);
-    source.copy(target);
+    await source.copy(target);
     return target.uri;
   } catch {
     return null;
@@ -54,7 +54,7 @@ export async function stagePhotoForQueue(
 
 async function loadIndex(): Promise<CacheIndex> {
   try {
-    const raw = await getStore().getItem(INDEX_KEY);
+    const raw = await getDataStore().getItem(INDEX_KEY);
     if (!raw) {
       return {};
     }
@@ -70,7 +70,7 @@ async function loadIndex(): Promise<CacheIndex> {
 
 async function saveIndex(index: CacheIndex): Promise<void> {
   try {
-    await getStore().setItem(INDEX_KEY, JSON.stringify(index));
+    await getDataStore().setItem(INDEX_KEY, JSON.stringify(index));
   } catch {
     /* ignore */
   }
@@ -129,7 +129,7 @@ export async function removeCachedPhoto(tripId: string, photoId: string): Promis
 
 export async function savePhotoList(tripId: string, photos: PhotoRecord[]): Promise<void> {
   try {
-    await getStore().setItem(LIST_KEY_PREFIX + tripId, JSON.stringify(photos));
+    await getDataStore().setItem(LIST_KEY_PREFIX + tripId, JSON.stringify(photos));
   } catch {
     /* ignore */
   }
@@ -137,7 +137,7 @@ export async function savePhotoList(tripId: string, photos: PhotoRecord[]): Prom
 
 export async function loadPhotoList(tripId: string): Promise<PhotoRecord[] | null> {
   try {
-    const raw = await getStore().getItem(LIST_KEY_PREFIX + tripId);
+    const raw = await getDataStore().getItem(LIST_KEY_PREFIX + tripId);
     if (!raw) {
       return null;
     }

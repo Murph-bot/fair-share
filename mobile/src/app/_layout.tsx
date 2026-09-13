@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, useColorScheme } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import { configureStorage } from "../api/storage";
+import { configureDataStorage, configureStorage } from "../api/storage";
 import { createSecureTokenStore } from "../api/secureTokenStore";
+import { fileDataStore } from "../api/fileDataStore";
 import { Colors, type ColorTheme } from "../constants/theme";
 
 /**
@@ -58,6 +59,9 @@ export default function RootLayout() {
         return;
       }
       configureStorage(store);
+      // Bulk data (trips, queues) exceeds SecureStore's ~2KB iOS value
+      // limit — it persists as files instead. Secrets stay in the store above.
+      configureDataStorage(fileDataStore());
       setStoreReady(true);
     });
     return () => {

@@ -441,7 +441,8 @@ export function parseTrip(data: unknown): Trip {
 }
 
 function paymentKey(payment: Payment): string {
-  return `${payment.frm}:${payment.to}`;
+  // Names may contain ":" — JSON encoding keeps the pair boundary unambiguous.
+  return JSON.stringify([payment.frm, payment.to]);
 }
 
 function paidForPair(trip: Trip, payment: Payment): number {

@@ -31,8 +31,9 @@ export function parseTripInput(raw: string): ParseTripInputResult {
     return { ok: false, error: "Enter a trip ID or link" };
   }
 
-  if (TRIP_ID_RE.test(input)) {
-    return { ok: true, id: input.toLowerCase() };
+  const lowered = input.toLowerCase();
+  if (TRIP_ID_RE.test(lowered)) {
+    return { ok: true, id: lowered };
   }
 
   const extracted = extractTripId(input);

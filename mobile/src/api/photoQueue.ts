@@ -1,4 +1,4 @@
-import { getStore } from "./storage";
+import { getDataStore } from "./storage";
 import { uploadPhoto } from "./photoApi";
 import type { PhotoPart } from "./photoApi";
 
@@ -51,7 +51,7 @@ async function cleanupStaged(uri: string | null): Promise<void> {
 
 export async function loadPhotoQueue(): Promise<QueuedPhotoUpload[]> {
   try {
-    const raw = await getStore().getItem(QUEUE_KEY);
+    const raw = await getDataStore().getItem(QUEUE_KEY);
     if (!raw) {
       return [];
     }
@@ -74,7 +74,7 @@ export async function loadPhotoQueue(): Promise<QueuedPhotoUpload[]> {
 
 async function savePhotoQueue(queue: QueuedPhotoUpload[]): Promise<void> {
   try {
-    await getStore().setItem(QUEUE_KEY, JSON.stringify(queue));
+    await getDataStore().setItem(QUEUE_KEY, JSON.stringify(queue));
   } catch {
     /* ignore */
   }
@@ -91,6 +91,17 @@ export async function removePhotoUpload(tripId: string, photoId: string): Promis
   const next = queue.filter((item) => !(item.tripId === tripId && item.photoId === photoId));
   if (next.length !== queue.length) {
     await savePhotoQueue(next);
+  }
+}
+
+/** Removes a queued upload and deletes its staged files. */
+export async function discardPhotoUpload(tripId: string, photoId: string): Promise<void> {
+  const queue = await loadPhotoQueue();
+  const item = queue.find((entry) => entry.tripId === tripId && entry.photoId === photoId);
+  await removePhotoUpload(tripId, photoId);
+  if (item) {
+    await cleanupStaged(item.displayUri);
+    await cleanupStaged(item.originalUri);
   }
 }
 

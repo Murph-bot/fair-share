@@ -151,8 +151,7 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       const created = await createRemoteTrip(name);
-      savePhotoPin(created.id, created.pin);
-      savePhotoToken(created.id, created.photos_token);
+      await Promise.all([savePhotoPin(created.id, created.pin), savePhotoToken(created.id, created.photos_token)]);
       router.push({ pathname: "/t/[id]", params: { id: created.id } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("Could not create trip"));
@@ -180,8 +179,7 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       const created = await createRemoteDemoTrip(t("Demo trip"));
-      savePhotoPin(created.id, created.pin);
-      savePhotoToken(created.id, created.photos_token);
+      await Promise.all([savePhotoPin(created.id, created.pin), savePhotoToken(created.id, created.photos_token)]);
       router.push({ pathname: "/t/[id]", params: { id: created.id } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("Could not create trip"));
@@ -200,8 +198,7 @@ export default function HomeScreen() {
       const created = await createRemoteTrip(template.name);
       const trip = createTripFromTemplate(templateId);
       await saveTrip(created.id, trip);
-      savePhotoPin(created.id, created.pin);
-      savePhotoToken(created.id, created.photos_token);
+      await Promise.all([savePhotoPin(created.id, created.pin), savePhotoToken(created.id, created.photos_token)]);
       router.push({ pathname: "/t/[id]", params: { id: created.id } });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("Could not create trip"));
@@ -213,9 +210,12 @@ export default function HomeScreen() {
     setError(null);
     setBusy(true);
     try {
-      const trips = await Promise.all(
-        recents.map(async (recent) => fetchTrip(recent.id)),
-      );
+      // Skip trips that can no longer be fetched (deleted elsewhere) instead
+      // of failing the whole backup.
+      const settled = await Promise.allSettled(recents.map((recent) => fetchTrip(recent.id)));
+      const trips = settled
+        .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTrip>>> => result.status === "fulfilled")
+        .map((result) => result.value);
       if (trips.length === 0) {
         setError(t("No trips on this device to back up"));
         setBusy(false);

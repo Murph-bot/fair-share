@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { configureStorage, memoryTokenStore } from "../src/api/storage";
+import { configureDataStorage, configureStorage, memoryTokenStore } from "../src/api/storage";
 import {
+  discardPhotoUpload,
   enqueuePhotoUpload,
   flushPhotoQueue,
   pendingPhotoUploads,
@@ -13,6 +14,7 @@ const photoId = "ab".repeat(16);
 
 beforeEach(() => {
   configureStorage(memoryTokenStore());
+  configureDataStorage(memoryTokenStore());
 });
 
 afterEach(() => {
@@ -46,6 +48,12 @@ describe("photoQueue", () => {
   it("removes a single queued upload", async () => {
     await enqueuePhotoUpload(upload());
     await removePhotoUpload(tripId, photoId);
+    expect(await pendingPhotoUploads(tripId)).toHaveLength(0);
+  });
+
+  it("discards a queued upload (staged cleanup is best-effort)", async () => {
+    await enqueuePhotoUpload(upload());
+    await discardPhotoUpload(tripId, photoId);
     expect(await pendingPhotoUploads(tripId)).toHaveLength(0);
   });
 

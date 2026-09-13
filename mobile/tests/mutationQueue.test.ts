@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { configureStorage, memoryTokenStore } from "../src/api/storage";
+import { configureDataStorage, configureStorage, memoryTokenStore } from "../src/api/storage";
 import { createTrip } from "../src/domain";
 import { enqueue, flushQueue, hasQueued, loadQueue } from "../src/api/mutationQueue";
 
@@ -13,6 +13,7 @@ function okResponse() {
 
 beforeEach(() => {
   configureStorage(memoryTokenStore());
+  configureDataStorage(memoryTokenStore());
 });
 
 afterEach(() => {

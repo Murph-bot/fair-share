@@ -12,8 +12,10 @@ import {
   parseBackup,
   parseTrip,
   removeExpense,
+  recordPayment,
   renamePerson,
   tripFileJson,
+  unrecordPayment,
   updateExpense,
   type Trip,
 } from "@fairshare/domain/trip";
@@ -439,5 +441,16 @@ describe("trip operations", () => {
         "id-1",
       ),
     ).toThrow(ValidationError);
+  });
+
+  it("keeps payment pairs distinct when names contain colons", () => {
+    // "A:B"→"C" must not collide with "A"→"B:C" under the pair key.
+    let trip = createTrip("T");
+    trip = recordPayment(trip, { frm: "A:B", to: "C", amount_cents: 100 });
+    trip = recordPayment(trip, { frm: "A", to: "B:C", amount_cents: 200 });
+    trip = unrecordPayment(trip, { frm: "A:B", to: "C", amount_cents: 999 });
+    expect(trip.completedPayments).toEqual([
+      expect.objectContaining({ frm: "A", to: "B:C", amount_cents: 200 }),
+    ]);
   });
 });
