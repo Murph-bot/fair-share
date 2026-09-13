@@ -17,9 +17,10 @@
   framework = "#custom"
 
 [[redirects]]
-  from = "/t/*"
-  to = "/index.html"
-  status = 200
+  from = "/*"
+  to = "https://fair-share-trips.pages.dev/:splat"
+  status = 301
+  force = true
 
 [[headers]]
   for = "/*"
