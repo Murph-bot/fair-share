@@ -118,14 +118,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_pull.add_argument(
         "--host",
         default=None,
-        help="API origin (or set FAIRSHARE_API), e.g. https://fair-share-trips.netlify.app",
+        help="API origin (or set FAIRSHARE_API), e.g. https://fair-share-trips.pages.dev",
     )
 
     p_push = sub.add_parser("push", help="Upload the local JSON file as a new hosted trip")
     p_push.add_argument(
         "--host",
         default=None,
-        help="API origin (or set FAIRSHARE_API), e.g. https://fair-share-trips.netlify.app",
+        help="API origin (or set FAIRSHARE_API), e.g. https://fair-share-trips.pages.dev",
     )
 
     return parser
