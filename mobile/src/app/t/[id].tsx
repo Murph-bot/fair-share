@@ -202,7 +202,7 @@ export default function TripScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const tripId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
-  const { trip, loading, saving, error, queued, offline, reload, mutate, flush } = useTrip(tripId);
+  const { trip, loading, saving, error, queued, offline, conflict, reload, mutate, flush } = useTrip(tripId);
   const [personName, setPersonName] = useState("");
   const [personError, setPersonError] = useState<string | null>(null);
   const [editingPerson, setEditingPerson] = useState<{ old: string; draft: string } | null>(null);
@@ -737,6 +737,16 @@ export default function TripScreen() {
                 : t("You are offline. Changes are saved locally and will sync when you are back online.")}
             </Text>
             <StepButton styles={styles} label={t("Sync now")} onPress={() => void flush()} />
+          </View>
+        ) : null}
+
+        {conflict ? (
+          <View style={[styles.offlineBanner, styles.dangerBanner]}>
+            <Text style={styles.offlineBannerText}>
+              {t(
+                "One of your offline changes conflicts with an edit made elsewhere and was not applied. Review the trip and redo that change if needed.",
+              )}
+            </Text>
           </View>
         ) : null}
 
@@ -1301,6 +1311,9 @@ function makeStyles(colors: ColorTheme) {
   errorBannerText: {
     color: colors.background,
     fontWeight: "600",
+  },
+  dangerBanner: {
+    backgroundColor: colors.negative,
   },
   offlineBanner: {
     backgroundColor: colors.tint,

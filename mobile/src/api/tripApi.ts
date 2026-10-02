@@ -4,6 +4,24 @@ import type { PublicTrip } from "../domain/photos";
 import { apiUrl, readError } from "./client";
 import { loadPhotoToken } from "./photoSession";
 
+export class ConflictError extends Error {}
+
+// Last revision (ETag) seen per trip; queued mutations carry it along so a
+// stale offline edit can be merged instead of silently overwriting
+// whatever changed on the server while the phone was offline.
+const tripRevs = new Map<string, string>();
+
+function rememberRev(tripId: string, response: Response): void {
+  const etag = response.headers.get("ETag");
+  if (etag) {
+    tripRevs.set(tripId, etag);
+  }
+}
+
+export function getKnownRev(tripId: string): string | undefined {
+  return tripRevs.get(tripId);
+}
+
 function asPublicTrip(raw: unknown): PublicTrip {
   const trip = parseTrip(raw);
   const photosLocked =
@@ -57,6 +75,7 @@ export async function fetchTrip(tripId: string): Promise<PublicTrip> {
     throw new Error(await readError(response));
   }
 
+  rememberRev(tripId, response);
   return asPublicTrip(await response.json());
 }
 
@@ -110,20 +129,26 @@ export async function deleteRemoteTrip(tripId: string): Promise<void> {
   }
 }
 
-export async function saveTrip(tripId: string, trip: Trip): Promise<PublicTrip> {
+export async function saveTrip(tripId: string, trip: Trip, options?: { ifMatch?: string }): Promise<PublicTrip> {
   const response = await fetch(apiUrl(`/api/trips/${tripId}`), {
     method: "PUT",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...(options?.ifMatch ? { "If-Match": options.ifMatch } : {}),
     },
     body: JSON.stringify(tripPayload(trip)),
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    const message = await readError(response);
+    if (response.status === 409) {
+      throw new ConflictError(message);
+    }
+    throw new Error(message);
   }
 
+  rememberRev(tripId, response);
   return asPublicTrip(await response.json());
 }
 

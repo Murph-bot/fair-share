@@ -1,5 +1,6 @@
 import { getDataStore } from "./storage";
-import { saveTrip } from "./tripApi";
+import { ConflictError, fetchTrip, getKnownRev, saveTrip } from "./tripApi";
+import { mergeTrips } from "./tripMerge";
 import type { Trip } from "../domain";
 
 const QUEUE_KEY = "fairshare.mutation.queue";
@@ -11,6 +12,16 @@ export type QueuedMutation = {
   trip: Trip;
   timestamp: string;
   attempts?: number;
+  // The trip (and its server revision) this edit was made on top of. Used to
+  // merge with whatever changed remotely while the device was offline.
+  // Missing for older queued items, which fall back to the pre-ETag
+  // behavior of overwriting whatever is on the server.
+  baseTrip?: Trip;
+  baseRev?: string;
+  // Set when a merge found the same item changed differently on both sides.
+  // Conflicted items are kept (not dropped by MAX_ATTEMPTS) and surfaced to
+  // the UI instead of being auto-resolved.
+  conflict?: boolean;
 };
 
 function readQueue(raw: string | null): QueuedMutation[] {
@@ -51,9 +62,18 @@ export async function saveQueue(queue: QueuedMutation[]): Promise<void> {
   }
 }
 
-export async function enqueue(tripId: string, trip: Trip): Promise<void> {
+export async function enqueue(
+  tripId: string,
+  trip: Trip,
+  base?: { trip: Trip; rev?: string },
+): Promise<void> {
   const queue = await loadQueue();
-  queue.push({ tripId, trip, timestamp: new Date().toISOString() });
+  queue.push({
+    tripId,
+    trip,
+    timestamp: new Date().toISOString(),
+    ...(base ? { baseTrip: base.trip, baseRev: base.rev } : {}),
+  });
   await saveQueue(queue);
 }
 
@@ -68,19 +88,70 @@ export async function hasQueued(tripId: string): Promise<boolean> {
   return queue.some((item) => item.tripId === tripId);
 }
 
+export async function hasConflict(tripId: string): Promise<boolean> {
+  const queue = await loadQueue();
+  return queue.some((item) => item.tripId === tripId && item.conflict);
+}
+
+async function updateQueueItem(
+  tripId: string,
+  timestamp: string,
+  update: (item: QueuedMutation) => QueuedMutation,
+): Promise<void> {
+  const queue = await loadQueue();
+  const next = queue.map((queued) =>
+    queued.tripId === tripId && queued.timestamp === timestamp ? update(queued) : queued,
+  );
+  await saveQueue(next);
+}
+
+// Resolves a 409 by fetching the latest remote trip and three-way merging it
+// with the edit's base and local state. A clean merge is saved immediately;
+// a true conflict (same item changed differently on both sides) is left in
+// the queue, flagged, rather than guessing which side should win.
+async function resolveConflict(item: QueuedMutation): Promise<"resolved" | "conflict" | "error"> {
+  try {
+    const remote = await fetchTrip(item.tripId);
+    const base = item.baseTrip ?? remote;
+    const { trip: merged, conflict } = mergeTrips(base, item.trip, remote);
+    if (conflict) {
+      return "conflict";
+    }
+    const rev = getKnownRev(item.tripId);
+    await saveTrip(item.tripId, merged, rev ? { ifMatch: rev } : undefined);
+    return "resolved";
+  } catch {
+    return "error";
+  }
+}
+
 export async function flushQueue(): Promise<void> {
   const queue = await loadQueue();
   if (queue.length === 0) {
     return;
   }
   for (const item of queue) {
+    if (item.conflict) {
+      continue;
+    }
     try {
-      await saveTrip(item.tripId, item.trip);
+      await saveTrip(item.tripId, item.trip, item.baseRev ? { ifMatch: item.baseRev } : undefined);
       await dequeue(item.tripId, item.timestamp);
     } catch (caught) {
       // Network failure: everything behind this would fail too — retry later.
       if (caught instanceof TypeError) {
         break;
+      }
+      if (caught instanceof ConflictError) {
+        const outcome = await resolveConflict(item);
+        if (outcome === "resolved") {
+          await dequeue(item.tripId, item.timestamp);
+        } else if (outcome === "conflict") {
+          await updateQueueItem(item.tripId, item.timestamp, (queued) => ({ ...queued, conflict: true }));
+        }
+        // "error" (e.g. the re-fetch failed): leave attempts untouched and
+        // retry on the next flush.
+        continue;
       }
       // A permanent failure (e.g. trip deleted remotely, validation error)
       // must not block the rest of the queue forever. Retry a few times,
@@ -89,12 +160,7 @@ export async function flushQueue(): Promise<void> {
       if (attempts >= MAX_ATTEMPTS) {
         await dequeue(item.tripId, item.timestamp);
       } else {
-        const next = (await loadQueue()).map((queued) =>
-          queued.tripId === item.tripId && queued.timestamp === item.timestamp
-            ? { ...queued, attempts }
-            : queued,
-        );
-        await saveQueue(next);
+        await updateQueueItem(item.tripId, item.timestamp, (queued) => ({ ...queued, attempts }));
       }
     }
   }
