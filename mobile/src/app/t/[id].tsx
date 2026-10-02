@@ -202,7 +202,8 @@ export default function TripScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const tripId = Array.isArray(params.id) ? params.id[0] : params.id ?? null;
-  const { trip, loading, saving, error, queued, offline, conflict, reload, mutate, flush } = useTrip(tripId);
+  const { trip, loading, saving, error, queued, offline, conflict, reload, mutate, flush, dismissConflict } =
+    useTrip(tripId);
   const [personName, setPersonName] = useState("");
   const [personError, setPersonError] = useState<string | null>(null);
   const [editingPerson, setEditingPerson] = useState<{ old: string; draft: string } | null>(null);
@@ -744,9 +745,11 @@ export default function TripScreen() {
           <View style={[styles.offlineBanner, styles.dangerBanner]}>
             <Text style={styles.offlineBannerText}>
               {t(
-                "One of your offline changes conflicts with an edit made elsewhere and was not applied. Review the trip and redo that change if needed.",
+                "Some of your offline changes conflicted with edits made elsewhere, so the other version was kept for: ",
               )}
+              {conflict.discarded.map((item) => item.description).join(", ")}
             </Text>
+            <StepButton styles={styles} label={t("Dismiss")} onPress={() => void dismissConflict()} />
           </View>
         ) : null}
 

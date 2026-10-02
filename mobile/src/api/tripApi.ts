@@ -3,23 +3,50 @@ import type { PublicTrip } from "../domain/photos";
 
 import { apiUrl, readError } from "./client";
 import { loadPhotoToken } from "./photoSession";
+import { getDataStore } from "./storage";
 
 export class ConflictError extends Error {}
 
 // Last revision (ETag) seen per trip; queued mutations carry it along so a
 // stale offline edit can be merged instead of silently overwriting
-// whatever changed on the server while the phone was offline.
+// whatever changed on the server while the phone was offline. Persisted
+// alongside the in-memory cache so it survives an app restart — without
+// that, a restart while offline would lose the rev and fall back to a
+// blind overwrite.
 const tripRevs = new Map<string, string>();
 
-function rememberRev(tripId: string, response: Response): void {
+function revKey(tripId: string): string {
+  return `fairshare.trip.rev.${tripId}`;
+}
+
+async function rememberRev(tripId: string, response: Response): Promise<void> {
   const etag = response.headers.get("ETag");
-  if (etag) {
-    tripRevs.set(tripId, etag);
+  if (!etag) {
+    return;
+  }
+  tripRevs.set(tripId, etag);
+  try {
+    await getDataStore().setItem(revKey(tripId), etag);
+  } catch {
+    /* best effort */
   }
 }
 
-export function getKnownRev(tripId: string): string | undefined {
-  return tripRevs.get(tripId);
+export async function getKnownRev(tripId: string): Promise<string | undefined> {
+  const cached = tripRevs.get(tripId);
+  if (cached) {
+    return cached;
+  }
+  try {
+    const stored = await getDataStore().getItem(revKey(tripId));
+    if (stored) {
+      tripRevs.set(tripId, stored);
+      return stored;
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
 }
 
 function asPublicTrip(raw: unknown): PublicTrip {
@@ -75,7 +102,7 @@ export async function fetchTrip(tripId: string): Promise<PublicTrip> {
     throw new Error(await readError(response));
   }
 
-  rememberRev(tripId, response);
+  await rememberRev(tripId, response);
   return asPublicTrip(await response.json());
 }
 
@@ -148,7 +175,7 @@ export async function saveTrip(tripId: string, trip: Trip, options?: { ifMatch?:
     throw new Error(message);
   }
 
-  rememberRev(tripId, response);
+  await rememberRev(tripId, response);
   return asPublicTrip(await response.json());
 }
 

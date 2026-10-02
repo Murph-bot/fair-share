@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { fetchTrip, getKnownRev, saveTrip } from "../api/tripApi";
-import { enqueue, flushQueue, hasConflict, hasQueued } from "../api/mutationQueue";
+import {
+  clearConflictNotice,
+  enqueue,
+  flushQueue,
+  hasQueued,
+  loadConflictNotice,
+  type ConflictNotice,
+} from "../api/mutationQueue";
 import { isOnline } from "../api/networkStatus";
 import { saveRecentTrip } from "../api/recentTrips";
 import { getDataStore } from "../api/storage";
@@ -15,10 +22,11 @@ export type UseTripResult = {
   error: string | null;
   queued: boolean;
   offline: boolean;
-  conflict: boolean;
+  conflict: ConflictNotice | null;
   reload: () => Promise<void>;
   mutate: (transform: (trip: Trip) => Trip) => Promise<boolean>;
   flush: () => Promise<void>;
+  dismissConflict: () => Promise<void>;
 };
 
 function errorMessage(error: unknown): string {
@@ -56,7 +64,7 @@ export function useTrip(tripId: string | null): UseTripResult {
   const [saving, setSaving] = useState(false);
   const [queued, setQueued] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [conflict, setConflict] = useState(false);
+  const [conflict, setConflict] = useState<ConflictNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const tripRef = useRef<PublicTrip | null>(null);
   const savingRef = useRef(false);
@@ -78,7 +86,7 @@ export function useTrip(tripId: string | null): UseTripResult {
     try {
       await flushQueue();
       setQueued(await hasQueued(tripId));
-      setConflict(await hasConflict(tripId));
+      setConflict(await loadConflictNotice(tripId));
       const nextTrip = await fetchTrip(tripId);
       tripRef.current = nextTrip;
       setTrip(nextTrip);
@@ -127,7 +135,7 @@ export function useTrip(tripId: string | null): UseTripResult {
       setQueued(false);
       try {
         const nextTrip = transform(current);
-        const base = { trip: current, rev: getKnownRev(tripId) };
+        const base = { trip: current, rev: await getKnownRev(tripId) };
         const online = await isOnline();
         if (!online) {
           await enqueue(tripId, nextTrip, base);
@@ -176,7 +184,7 @@ export function useTrip(tripId: string | null): UseTripResult {
       setSaving(true);
       await flushQueue();
       setQueued(await hasQueued(tripId ?? ""));
-      setConflict(await hasConflict(tripId ?? ""));
+      setConflict(await loadConflictNotice(tripId ?? ""));
       await reload();
     } catch (caught) {
       setError(errorMessage(caught));
@@ -184,6 +192,14 @@ export function useTrip(tripId: string | null): UseTripResult {
       setSaving(false);
     }
   }, [tripId, reload]);
+
+  const dismissConflict = useCallback(async () => {
+    if (!tripId) {
+      return;
+    }
+    await clearConflictNotice(tripId);
+    setConflict(null);
+  }, [tripId]);
 
   return {
     trip,
@@ -196,5 +212,6 @@ export function useTrip(tripId: string | null): UseTripResult {
     reload,
     mutate,
     flush,
+    dismissConflict,
   };
 }

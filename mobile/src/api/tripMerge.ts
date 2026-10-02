@@ -1,6 +1,8 @@
 import type { Expense, Payment, Trip } from "../domain";
 
-export type MergeResult = { trip: Trip; conflict: boolean };
+export type TripConflict = { type: "expense" | "payment" | "field"; id?: string; description: string };
+
+export type MergeResult = { trip: Trip; conflicts: TripConflict[] };
 
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -13,27 +15,40 @@ function deepEqual(a: unknown, b: unknown): boolean {
     }
     return a.every((item, index) => deepEqual(item, b[index]));
   }
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-  if (aKeys.length !== bKeys.length) {
-    return false;
+  // Union (not count) the keys: parseTrip() round-trips optional fields as an
+  // explicit `undefined` (e.g. `completedAt: undefined`), while a value
+  // built directly by domain helpers may simply omit the key. Both must
+  // compare equal, since the wire format (and every other consumer) treats
+  // an absent key the same as one set to undefined.
+  const aRecord = a as Record<string, unknown>;
+  const bRecord = b as Record<string, unknown>;
+  const keys = new Set([...Object.keys(aRecord), ...Object.keys(bRecord)]);
+  for (const key of keys) {
+    if (!deepEqual(aRecord[key], bRecord[key])) {
+      return false;
+    }
   }
-  return aKeys.every((key) =>
-    deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
-  );
+  return true;
 }
+
+type ItemConflict<T> = { id: string; local?: T; remote?: T };
 
 // Three-way merge of a list keyed by id: an item unchanged on one side defers
 // to whatever the other side did (including removing it); an item changed
-// differently on both sides is a true conflict and keeps the remote value.
-function mergeById<T extends { id: string }>(base: T[], local: T[], remote: T[]): { items: T[]; conflict: boolean } {
+// differently on both sides is a true conflict and keeps the remote value,
+// reporting what the local side wanted so the caller can tell the user.
+function mergeById<T extends { id: string }>(
+  base: T[],
+  local: T[],
+  remote: T[],
+): { items: T[]; conflicts: ItemConflict<T>[] } {
   const baseById = new Map(base.map((item) => [item.id, item]));
   const localById = new Map(local.map((item) => [item.id, item]));
   const remoteById = new Map(remote.map((item) => [item.id, item]));
   const ids = new Set([...baseById.keys(), ...localById.keys(), ...remoteById.keys()]);
 
   const items: T[] = [];
-  let conflict = false;
+  const conflicts: ItemConflict<T>[] = [];
 
   for (const id of ids) {
     const baseItem = baseById.get(id);
@@ -49,7 +64,7 @@ function mergeById<T extends { id: string }>(base: T[], local: T[], remote: T[])
     } else if (deepEqual(localItem, remoteItem)) {
       if (localItem) items.push(localItem);
     } else {
-      conflict = true;
+      conflicts.push({ id, local: localItem, remote: remoteItem });
       if (remoteItem) items.push(remoteItem);
     }
   }
@@ -64,7 +79,7 @@ function mergeById<T extends { id: string }>(base: T[], local: T[], remote: T[])
     return ai - bi;
   });
 
-  return { items, conflict };
+  return { items, conflicts };
 }
 
 function mergeStringSet(base: string[], local: string[], remote: string[]): string[] {
@@ -92,8 +107,16 @@ function paymentId(payment: Payment): string {
   return `${payment.frm}>${payment.to}:${payment.amount_cents}`;
 }
 
-function withPaymentId(payment: Payment): Payment & { id: string } {
-  return { ...payment, id: paymentId(payment) };
+// Multiple completed payments can share the same frm/to/amount; disambiguate
+// by occurrence so a merge doesn't collapse distinct duplicates into one.
+function withPaymentIds(payments: Payment[]): Array<Payment & { id: string }> {
+  const seen = new Map<string, number>();
+  return payments.map((payment) => {
+    const key = paymentId(payment);
+    const occurrence = seen.get(key) ?? 0;
+    seen.set(key, occurrence + 1);
+    return { ...payment, id: `${key}#${occurrence}` };
+  });
 }
 
 function stripPaymentId(payment: Payment & { id: string }): Payment {
@@ -104,8 +127,8 @@ function stripPaymentId(payment: Payment & { id: string }): Payment {
 // Merges a local offline edit back into the latest remote trip, using the
 // trip snapshot the local edit was originally based on as the common
 // ancestor. Additions made on either side are kept; an item edited
-// differently on both sides is flagged as a conflict and the remote value
-// wins so no edit is silently lost.
+// differently on both sides is a true conflict: the remote value wins and
+// the discarded local edit is reported so the caller can tell the user.
 export function mergeTrips(base: Trip, local: Trip, remote: Trip): MergeResult {
   const name = mergeScalar(base.name, local.name, remote.name);
   const currency = mergeScalar(base.currency, local.currency, remote.currency);
@@ -113,9 +136,9 @@ export function mergeTrips(base: Trip, local: Trip, remote: Trip): MergeResult {
   const people = mergeStringSet(base.people, local.people, remote.people);
   const expenses = mergeById<Expense>(base.expenses, local.expenses, remote.expenses);
   const payments = mergeById(
-    (base.completedPayments ?? []).map(withPaymentId),
-    (local.completedPayments ?? []).map(withPaymentId),
-    (remote.completedPayments ?? []).map(withPaymentId),
+    withPaymentIds(base.completedPayments ?? []),
+    withPaymentIds(local.completedPayments ?? []),
+    withPaymentIds(remote.completedPayments ?? []),
   );
 
   const trip: Trip = {
@@ -128,7 +151,18 @@ export function mergeTrips(base: Trip, local: Trip, remote: Trip): MergeResult {
     currency: currency.value,
   };
 
-  const conflict = name.conflict || currency.conflict || archivedAt.conflict || expenses.conflict || payments.conflict;
+  const conflicts: TripConflict[] = [];
+  if (name.conflict) conflicts.push({ type: "field", description: "Trip name" });
+  if (currency.conflict) conflicts.push({ type: "field", description: "Currency" });
+  if (archivedAt.conflict) conflicts.push({ type: "field", description: "Archived status" });
+  for (const c of expenses.conflicts) {
+    const edit = c.local ?? c.remote;
+    conflicts.push({ type: "expense", id: c.id, description: edit?.description ?? c.id });
+  }
+  for (const c of payments.conflicts) {
+    const edit = c.local ?? c.remote;
+    conflicts.push({ type: "payment", id: c.id, description: edit ? `${edit.frm} → ${edit.to}` : c.id });
+  }
 
-  return { trip, conflict };
+  return { trip, conflicts };
 }

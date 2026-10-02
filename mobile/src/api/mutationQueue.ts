@@ -1,11 +1,14 @@
 import { getDataStore } from "./storage";
 import { ConflictError, fetchTrip, getKnownRev, saveTrip } from "./tripApi";
-import { mergeTrips } from "./tripMerge";
+import { mergeTrips, type TripConflict } from "./tripMerge";
 import type { Trip } from "../domain";
 
 const QUEUE_KEY = "fairshare.mutation.queue";
 
 const MAX_ATTEMPTS = 5;
+// How many times to re-fetch-and-remerge if the merged save itself races
+// with another write (back-to-back 409s), before giving up for this flush.
+const MAX_CONFLICT_RETRIES = 3;
 
 export type QueuedMutation = {
   tripId: string;
@@ -18,11 +21,48 @@ export type QueuedMutation = {
   // behavior of overwriting whatever is on the server.
   baseTrip?: Trip;
   baseRev?: string;
-  // Set when a merge found the same item changed differently on both sides.
-  // Conflicted items are kept (not dropped by MAX_ATTEMPTS) and surfaced to
-  // the UI instead of being auto-resolved.
-  conflict?: boolean;
 };
+
+export type ConflictNotice = {
+  tripId: string;
+  timestamp: string;
+  discarded: TripConflict[];
+};
+
+function conflictKey(tripId: string): string {
+  return `fairshare.trip.conflict.${tripId}`;
+}
+
+export async function recordConflictNotice(tripId: string, discarded: TripConflict[]): Promise<void> {
+  if (discarded.length === 0) {
+    return;
+  }
+  const notice: ConflictNotice = { tripId, timestamp: new Date().toISOString(), discarded };
+  try {
+    await getDataStore().setItem(conflictKey(tripId), JSON.stringify(notice));
+  } catch {
+    /* best effort */
+  }
+}
+
+export async function loadConflictNotice(tripId: string): Promise<ConflictNotice | null> {
+  try {
+    const raw = await getDataStore().getItem(conflictKey(tripId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === "object" && parsed !== null ? (parsed as ConflictNotice) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearConflictNotice(tripId: string): Promise<void> {
+  try {
+    await getDataStore().removeItem(conflictKey(tripId));
+  } catch {
+    /* ignore */
+  }
+}
 
 function readQueue(raw: string | null): QueuedMutation[] {
   if (!raw) return [];
@@ -88,11 +128,6 @@ export async function hasQueued(tripId: string): Promise<boolean> {
   return queue.some((item) => item.tripId === tripId);
 }
 
-export async function hasConflict(tripId: string): Promise<boolean> {
-  const queue = await loadQueue();
-  return queue.some((item) => item.tripId === tripId && item.conflict);
-}
-
 async function updateQueueItem(
   tripId: string,
   timestamp: string,
@@ -105,24 +140,39 @@ async function updateQueueItem(
   await saveQueue(next);
 }
 
-// Resolves a 409 by fetching the latest remote trip and three-way merging it
-// with the edit's base and local state. A clean merge is saved immediately;
-// a true conflict (same item changed differently on both sides) is left in
-// the queue, flagged, rather than guessing which side should win.
-async function resolveConflict(item: QueuedMutation): Promise<"resolved" | "conflict" | "error"> {
-  try {
+async function ifMatchFor(tripId: string): Promise<{ ifMatch: string } | undefined> {
+  const rev = await getKnownRev(tripId);
+  return rev ? { ifMatch: rev } : undefined;
+}
+
+// Fetches the latest remote trip and three-way merges it with the edit's
+// base and local state, then saves the result. A clean merge (or one with
+// true conflicts, where the remote value wins for the conflicting items) is
+// saved in the same pass — nothing is left half-applied. Returns false only
+// if the save keeps racing with other writers past MAX_CONFLICT_RETRIES, or
+// if resolving requires network access that isn't there right now; in both
+// cases the item stays queued untouched, to retry on the next flush.
+async function mergeAndSave(item: QueuedMutation): Promise<boolean> {
+  const base = item.baseTrip;
+  for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt++) {
     const remote = await fetchTrip(item.tripId);
-    const base = item.baseTrip ?? remote;
-    const { trip: merged, conflict } = mergeTrips(base, item.trip, remote);
-    if (conflict) {
-      return "conflict";
+    if (!base) {
+      await saveTrip(item.tripId, item.trip, await ifMatchFor(item.tripId));
+      return true;
     }
-    const rev = getKnownRev(item.tripId);
-    await saveTrip(item.tripId, merged, rev ? { ifMatch: rev } : undefined);
-    return "resolved";
-  } catch {
-    return "error";
+    const { trip: merged, conflicts } = mergeTrips(base, item.trip, remote);
+    try {
+      await saveTrip(item.tripId, merged, await ifMatchFor(item.tripId));
+    } catch (caught) {
+      if (caught instanceof ConflictError) {
+        continue; // someone else wrote again meanwhile; refetch and remerge
+      }
+      throw caught;
+    }
+    await recordConflictNotice(item.tripId, conflicts);
+    return true;
   }
+  return false;
 }
 
 export async function flushQueue(): Promise<void> {
@@ -131,10 +181,18 @@ export async function flushQueue(): Promise<void> {
     return;
   }
   for (const item of queue) {
-    if (item.conflict) {
-      continue;
-    }
     try {
+      if (item.baseTrip && !item.baseRev) {
+        // No known revision for this edit (e.g. the app restarted offline
+        // and lost the in-memory rev cache before this item could record
+        // one): merge against the latest remote instead of overwriting it.
+        const resolved = await mergeAndSave(item);
+        if (resolved) {
+          await dequeue(item.tripId, item.timestamp);
+        }
+        continue;
+      }
+
       await saveTrip(item.tripId, item.trip, item.baseRev ? { ifMatch: item.baseRev } : undefined);
       await dequeue(item.tripId, item.timestamp);
     } catch (caught) {
@@ -143,14 +201,10 @@ export async function flushQueue(): Promise<void> {
         break;
       }
       if (caught instanceof ConflictError) {
-        const outcome = await resolveConflict(item);
-        if (outcome === "resolved") {
+        const resolved = await mergeAndSave(item);
+        if (resolved) {
           await dequeue(item.tripId, item.timestamp);
-        } else if (outcome === "conflict") {
-          await updateQueueItem(item.tripId, item.timestamp, (queued) => ({ ...queued, conflict: true }));
         }
-        // "error" (e.g. the re-fetch failed): leave attempts untouched and
-        // retry on the next flush.
         continue;
       }
       // A permanent failure (e.g. trip deleted remotely, validation error)
