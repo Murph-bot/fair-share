@@ -21,7 +21,7 @@ import {
   countPhotos,
   deletePhotoObject,
   deleteTripRow,
-  getPhoto,
+  photoExists,
   getTripRaw,
   listPhotos,
   purgeExpiredPinAttempts,
@@ -268,8 +268,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
     if (denied) {
       return denied;
     }
-    const existing = await getPhoto(env, tripId, photoId, false);
-    if (!existing) {
+    if (!(await photoExists(env, tripId, photoId))) {
       return json(404, { error: "Photo not found" });
     }
     await deletePhotoObject(env, tripId, photoId);
@@ -336,8 +335,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
     if (!PHOTO_ID_RE.test(photoId)) {
       throw new ValidationError("Invalid photo id");
     }
-    const existing = await getPhoto(env, tripId, photoId, false);
-    if (existing) {
+    if (await photoExists(env, tripId, photoId)) {
       throw new ValidationError("Photo already exists");
     }
 

@@ -108,14 +108,20 @@ export async function getPhoto(
   tripId: string,
   photoId: string,
   original: boolean,
-): Promise<{ data: ArrayBuffer; contentType: string } | null> {
+): Promise<{ data: ReadableStream | ArrayBuffer; contentType: string } | null> {
   const key = original ? originalKey(tripId, photoId) : displayKey(tripId, photoId);
   const obj = await env.FAIRSHARE_PHOTOS.get(key);
   if (!obj) {
     return null;
   }
   const contentType = obj.customMetadata?.contentType ?? "image/jpeg";
-  return { data: await obj.arrayBuffer(), contentType };
+  // Stream when the binding gives us a body (real R2 does) to avoid
+  // buffering 4-8 MB originals in the Function.
+  return { data: obj.body ?? (await obj.arrayBuffer()), contentType };
+}
+
+export async function photoExists(env: Env, tripId: string, photoId: string): Promise<boolean> {
+  return (await env.FAIRSHARE_PHOTOS.head(displayKey(tripId, photoId))) !== null;
 }
 
 export async function deletePhotoObject(env: Env, tripId: string, photoId: string): Promise<void> {

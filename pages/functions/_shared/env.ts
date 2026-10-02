@@ -26,6 +26,7 @@ export interface R2ObjectLike {
 
 export interface R2ObjectBodyLike {
   arrayBuffer(): Promise<ArrayBuffer>;
+  body?: ReadableStream;
   customMetadata?: R2Metadata;
 }
 
