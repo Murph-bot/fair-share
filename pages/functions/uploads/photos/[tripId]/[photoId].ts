@@ -59,7 +59,9 @@ export async function handlePhotoRequest(
       status: 200,
       headers: {
         "Content-Type": result.contentType,
-        "Cache-Control": pinHash ? "private, max-age=300" : "public, max-age=31536000, immutable",
+        // A grandfathered trip can be locked later with POST /pin, so even
+        // unlocked photos must not sit in shared or year-long caches.
+        "Cache-Control": pinHash ? "private, max-age=300" : "private, max-age=3600",
         ...corsHeaders(),
       },
     });
