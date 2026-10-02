@@ -26,7 +26,9 @@ import {
   listPhotos,
   putPhoto,
   recordPinFailure,
+  revFromRecord,
   setTripRaw,
+  updateTripIfRev,
 } from "../_shared/stores";
 import { expireDuePhotos } from "../_shared/expiry";
 import {
@@ -63,6 +65,19 @@ async function requirePhotoSession(
   return null;
 }
 
+function parseIfMatch(header: string | null): number | undefined {
+  if (!header) {
+    return undefined;
+  }
+  const match = /^(?:W\/)?"(\d+)"$/.exec(header.trim());
+  return match ? Number(match[1]) : undefined;
+}
+
+function withEtag(res: Response, rev: number): Response {
+  res.headers.set("ETag", `"${rev}"`);
+  return res;
+}
+
 async function photoUrls(
   env: Env,
   tripId: string,
@@ -95,7 +110,7 @@ async function handleTripRoutes(req: Request, env: Env, tripId: string): Promise
     if (raw === null) {
       return json(404, { error: "Trip not found" });
     }
-    return json(200, publicTrip(parseTrip(raw), Boolean(pinHashFromRecord(raw))));
+    return withEtag(json(200, publicTrip(parseTrip(raw), Boolean(pinHashFromRecord(raw)))), revFromRecord(raw));
   }
 
   if (req.method === "PUT") {
@@ -105,8 +120,19 @@ async function handleTripRoutes(req: Request, env: Env, tripId: string): Promise
     }
     const trip: Trip = parseTrip(await readJsonBody(req));
     const pinHash = pinHashFromRecord(existing);
-    await setTripRaw(env, tripId, pinHash ? { ...trip, pin_hash: pinHash } : trip);
-    return json(200, publicTrip(trip, Boolean(pinHash)));
+    // Clients that send If-Match get a 409 instead of silently overwriting
+    // edits made elsewhere. Without it (older clients) the write is still
+    // atomic against the revision we just read.
+    const ifMatch = parseIfMatch(req.headers.get("If-Match"));
+    const expectedRev = ifMatch ?? revFromRecord(existing);
+    const nextRev = expectedRev + 1;
+    const record = { ...trip, ...(pinHash ? { pin_hash: pinHash } : {}), rev: nextRev };
+    if (!(await updateTripIfRev(env, tripId, record, expectedRev))) {
+      return json(409, {
+        error: "This trip was changed on another device. Reload to get the latest version, then redo your change.",
+      });
+    }
+    return withEtag(json(200, publicTrip(trip, Boolean(pinHash))), nextRev);
   }
 
   if (req.method === "DELETE") {
@@ -216,7 +242,7 @@ async function handleSetPin(req: Request, env: Env, tripId: string, ip: string):
     throw new ValidationError("Trip already has a PIN");
   }
   const trip = parseTrip(latest);
-  await setTripRaw(env, tripId, { ...trip, pin_hash: pinHash });
+  await setTripRaw(env, tripId, { ...trip, pin_hash: pinHash, rev: revFromRecord(latest) + 1 });
   await clearPinFailures(env, tripId, ip);
   const photosToken = await createSessionToken(tripId, pepper);
   return json(200, { pin, photos_token: photosToken });

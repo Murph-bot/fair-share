@@ -29,6 +29,35 @@ export async function setTripRaw(env: Env, tripId: string, raw: unknown): Promis
     .run();
 }
 
+/** Revision counter stored inside the payload (absent on older rows = 0). */
+export function revFromRecord(raw: unknown): number {
+  if (typeof raw !== "object" || raw === null) {
+    return 0;
+  }
+  const rev = (raw as { rev?: unknown }).rev;
+  return typeof rev === "number" && Number.isInteger(rev) && rev >= 0 ? rev : 0;
+}
+
+/**
+ * Atomic compare-and-set on the stored revision. Returns false when another
+ * writer bumped the revision since `expectedRev` was read.
+ */
+export async function updateTripIfRev(
+  env: Env,
+  tripId: string,
+  raw: unknown,
+  expectedRev: number,
+): Promise<boolean> {
+  const result = await env.FAIRSHARE_DB.prepare(
+    `UPDATE trips SET payload = ?, updated_at = ?
+     WHERE id = ? AND COALESCE(json_extract(payload, '$.rev'), 0) = ?`,
+  )
+    .bind(JSON.stringify(raw), new Date().toISOString(), tripId, expectedRev)
+    .run();
+  const changes = (result.meta as { changes?: unknown } | undefined)?.changes;
+  return typeof changes === "number" && changes > 0;
+}
+
 export async function deleteTripRow(env: Env, tripId: string): Promise<void> {
   await env.FAIRSHARE_DB.prepare("DELETE FROM trips WHERE id = ?").bind(tripId).run();
 }

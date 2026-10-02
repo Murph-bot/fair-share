@@ -6,7 +6,8 @@ export const MAX_JSON_BYTES = 200_000;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, If-Match",
+  "Access-Control-Expose-Headers": "ETag",
   "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
 } as const;
 

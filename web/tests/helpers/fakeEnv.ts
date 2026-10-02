@@ -37,6 +37,16 @@ export function makeFakeEnv(): {
               if (sql.includes("INSERT INTO trips")) {
                 trips.set(String(a), JSON.parse(String(b)) as unknown);
                 void c;
+              } else if (sql.includes("UPDATE trips SET payload")) {
+                // (payload, updated_at, id, expectedRev)
+                const [payload, , id, expectedRev] = values;
+                const current = trips.get(String(id)) as { rev?: unknown } | undefined;
+                const rev = typeof current?.rev === "number" ? current.rev : 0;
+                if (current === undefined || rev !== expectedRev) {
+                  return { meta: { changes: 0 } };
+                }
+                trips.set(String(id), JSON.parse(String(payload)) as unknown);
+                return { meta: { changes: 1 } };
               } else if (sql.includes("DELETE FROM trips")) {
                 trips.delete(String(a));
               }

@@ -57,11 +57,23 @@ export async function createRemoteTrip(name: string): Promise<{
   return { id: body.id, trip: asPublicTrip(body.trip), pin: body.pin, photos_token: body.photos_token };
 }
 
+// Last revision (ETag) seen per trip; sent as If-Match so a stale tab gets
+// a 409 instead of overwriting someone else's edits.
+const tripEtags = new Map<string, string>();
+
+function rememberEtag(id: string, res: Response): void {
+  const etag = res.headers.get("ETag");
+  if (etag) {
+    tripEtags.set(id, etag);
+  }
+}
+
 export async function fetchTrip(id: string): Promise<PublicTrip> {
   const res = await fetch(`/api/trips/${id}`);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
+  rememberEtag(id, res);
   return asPublicTrip(await res.json());
 }
 
@@ -110,7 +122,10 @@ export async function deleteRemoteTrip(id: string): Promise<void> {
 export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip> {
   const res = await fetch(`/api/trips/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(tripEtags.has(id) ? { "If-Match": tripEtags.get(id) as string } : {}),
+    },
     body: JSON.stringify({
       schema_version: trip.schema_version,
       name: trip.name,
@@ -138,6 +153,7 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
   if (!res.ok) {
     throw new Error(await readError(res));
   }
+  rememberEtag(id, res);
   return asPublicTrip(await res.json());
 }
 
