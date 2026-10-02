@@ -114,6 +114,12 @@ async function handleTripRoutes(req: Request, env: Env, tripId: string): Promise
     if (existing === null) {
       return json(404, { error: "Trip not found" });
     }
+    // Deleting the trip deletes every photo, so it needs the same PIN
+    // session as deleting a single photo.
+    const denied = await requirePhotoSession(req, env, tripId, pinHashFromRecord(existing));
+    if (denied) {
+      return denied;
+    }
     const photos = await listPhotos(env, tripId);
     for (const photo of photos) {
       await deletePhotoObject(env, tripId, photo.photoId);

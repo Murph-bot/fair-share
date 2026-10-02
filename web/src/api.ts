@@ -100,6 +100,7 @@ export async function createRemoteTemplateTrip(
 export async function deleteRemoteTrip(id: string): Promise<void> {
   const res = await fetch(`/api/trips/${id}`, {
     method: "DELETE",
+    headers: authHeaders(id),
   });
   if (!res.ok) {
     throw new Error(await readError(res));

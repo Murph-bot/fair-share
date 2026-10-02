@@ -2,6 +2,7 @@ import { createExampleTrip, parseTrip, type Trip } from "../domain";
 import type { PublicTrip } from "../domain/photos";
 
 import { apiUrl, readError } from "./client";
+import { loadPhotoToken } from "./photoSession";
 
 function asPublicTrip(raw: unknown): PublicTrip {
   const trip = parseTrip(raw);
@@ -90,11 +91,17 @@ function tripPayload(trip: Trip): TripPayload {
   };
 }
 
+async function photoAuthHeader(tripId: string): Promise<Record<string, string>> {
+  const token = await loadPhotoToken(tripId);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export async function deleteRemoteTrip(tripId: string): Promise<void> {
   const response = await fetch(apiUrl(`/api/trips/${tripId}`), {
     method: "DELETE",
     headers: {
       Accept: "application/json",
+      ...(await photoAuthHeader(tripId)),
     },
   });
 
