@@ -1,5 +1,5 @@
 import { RateLimitError } from "../../../packages/domain/src/errors";
-import type { Env, R2Metadata } from "./env";
+import type { Env, R2Metadata, R2ObjectLike } from "./env";
 
 const PIN_ATTEMPT_LIMIT = 8;
 const PIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
@@ -127,9 +127,16 @@ export async function listPhotos(
   env: Env,
   tripId: string,
 ): Promise<Array<{ photoId: string; uploadedAt: string; hasOriginal: boolean }>> {
-  const listed = await env.FAIRSHARE_PHOTOS.list({ prefix: `${tripId}/` });
+  const objects: R2ObjectLike[] = [];
+  let cursor: string | undefined;
+  do {
+    // R2 omits customMetadata from list results unless asked (r2_list_honor_include).
+    const listed = await env.FAIRSHARE_PHOTOS.list({ prefix: `${tripId}/`, cursor, include: ["customMetadata"] });
+    objects.push(...listed.objects);
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
   const photos: Array<{ photoId: string; uploadedAt: string; hasOriginal: boolean }> = [];
-  for (const obj of listed.objects) {
+  for (const obj of objects) {
     const rest = obj.key.slice(tripId.length + 1);
     // Display keys look like "<photoId>"; original keys look like "<photoId>/original".
     if (!rest || rest.includes("/")) {
@@ -155,7 +162,7 @@ export async function listAllPhotoKeys(
   const keys: Array<{ key: string; uploadedAt: string }> = [];
   let cursor: string | undefined;
   do {
-    const listed = await env.FAIRSHARE_PHOTOS.list({ cursor, limit: 1000 });
+    const listed = await env.FAIRSHARE_PHOTOS.list({ cursor, limit: 1000, include: ["customMetadata"] });
     for (const obj of listed.objects) {
       const uploadedAt = obj.customMetadata?.uploadedAt ?? obj.uploaded.toISOString();
       keys.push({ key: obj.key, uploadedAt });

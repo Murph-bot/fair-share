@@ -38,7 +38,12 @@ export interface R2BucketLike {
     options?: { customMetadata?: R2Metadata },
   ): Promise<unknown>;
   delete(key: string): Promise<void>;
-  list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
+  list(options?: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+    include?: Array<"httpMetadata" | "customMetadata">;
+  }): Promise<{
     objects: R2ObjectLike[];
     truncated: boolean;
     cursor?: string;

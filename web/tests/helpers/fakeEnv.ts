@@ -10,7 +10,7 @@ export const TEST_PEPPER = "test-pepper-for-testing-only-1234";
 
 export type FakePhoto = { data: Uint8Array; metadata: R2Metadata; uploaded: Date };
 
-export function makeFakeEnv(): {
+export function makeFakeEnv(opts: { r2PageSize?: number } = {}): {
   env: Env;
   trips: Map<string, unknown>;
   photos: Map<string, FakePhoto>;
@@ -127,19 +127,27 @@ export function makeFakeEnv(): {
       photos.delete(key);
     },
     async list(options) {
+      // Mirrors real R2: customMetadata only when include asks for it,
+      // and results are paged (limit, cursor = next start index).
       const prefix = options?.prefix ?? "";
       const keys = [...photos.keys()].filter((key) => key.startsWith(prefix)).sort();
+      const pageSize = Math.min(options?.limit ?? 1000, opts.r2PageSize ?? 1000);
+      const start = options?.cursor ? Number(options.cursor) : 0;
+      const page = keys.slice(start, start + pageSize);
+      const withMeta = options?.include?.includes("customMetadata") ?? false;
+      const truncated = start + pageSize < keys.length;
       return {
-        objects: keys.map((key) => {
+        objects: page.map((key) => {
           const photo = photos.get(key) as FakePhoto;
           return {
             key,
             uploaded: photo.uploaded,
             size: photo.data.byteLength,
-            customMetadata: photo.metadata,
+            ...(withMeta ? { customMetadata: photo.metadata } : {}),
           };
         }),
-        truncated: false,
+        truncated,
+        ...(truncated ? { cursor: String(start + pageSize) } : {}),
       };
     },
   };
