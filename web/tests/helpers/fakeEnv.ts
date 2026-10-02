@@ -27,6 +27,20 @@ export function makeFakeEnv(): {
           const [a, b, c] = values;
           return {
             async first<T>() {
+              if (sql.includes("INSERT INTO pin_attempts")) {
+                // (key, resetAtIfNew, now): atomic like D1's single writer.
+                const [key, resetAt, now] = values as [string, number, number];
+                const cur = pinAttempts.get(key) as { count: number; resetAt: number } | undefined;
+                const next =
+                  cur && cur.resetAt > now ? { count: cur.count + 1, resetAt: cur.resetAt } : { count: 1, resetAt };
+                pinAttempts.set(key, next);
+                return { count: next.count } as T;
+              }
+              if (sql.includes("SELECT count FROM pin_attempts")) {
+                const [key, now] = values as [string, number];
+                const cur = pinAttempts.get(key) as { count: number; resetAt: number } | undefined;
+                return (cur && cur.resetAt > now ? { count: cur.count } : null) as T;
+              }
               if (sql.includes("SELECT payload FROM trips")) {
                 const raw = trips.get(String(a));
                 return (raw === undefined ? null : { payload: JSON.stringify(raw) }) as T;
@@ -47,6 +61,15 @@ export function makeFakeEnv(): {
                 }
                 trips.set(String(id), JSON.parse(String(payload)) as unknown);
                 return { meta: { changes: 1 } };
+              } else if (sql.includes("DELETE FROM pin_attempts WHERE key")) {
+                pinAttempts.delete(String(a));
+              } else if (sql.includes("UPDATE pin_attempts SET count")) {
+                const cur = pinAttempts.get(String(a)) as { count: number; resetAt: number } | undefined;
+                if (cur) pinAttempts.set(String(a), { ...cur, count: Math.max(cur.count - 1, 0) });
+              } else if (sql.includes("DELETE FROM pin_attempts WHERE reset_at")) {
+                for (const [key, v] of pinAttempts) {
+                  if ((v as { resetAt: number }).resetAt <= Number(a)) pinAttempts.delete(key);
+                }
               } else if (sql.includes("DELETE FROM trips")) {
                 trips.delete(String(a));
               }

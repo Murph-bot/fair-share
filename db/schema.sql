@@ -10,3 +10,12 @@ CREATE TABLE IF NOT EXISTS trips (
   payload TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- PIN attempt counters (replaces the KV read-then-write limiter, which let
+-- parallel guesses through). Keys: pin:attempts:<trip>:<ip or /64> (15 min)
+-- and pin:trip:<trip> (24 h). reset_at is epoch milliseconds.
+CREATE TABLE IF NOT EXISTS pin_attempts (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL,
+  reset_at INTEGER NOT NULL
+);

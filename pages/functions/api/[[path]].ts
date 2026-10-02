@@ -24,8 +24,9 @@ import {
   getPhoto,
   getTripRaw,
   listPhotos,
+  purgeExpiredPinAttempts,
   putPhoto,
-  recordPinFailure,
+  reservePinAttempt,
   revFromRecord,
   setTripRaw,
   updateTripIfRev,
@@ -176,10 +177,9 @@ async function handleSession(req: Request, env: Env, tripId: string, ip: string)
     throw new ValidationError("PIN must be 6 digits");
   }
 
-  await assertPinAllowed(env, tripId, ip);
+  await reservePinAttempt(env, tripId, ip);
   const pepper = pinPepper(env);
   if (!(await pinMatches(pin, tripId, pepper, pinHash))) {
-    await recordPinFailure(env, tripId, ip);
     return json(401, { error: "Wrong PIN" });
   }
   await clearPinFailures(env, tripId, ip);
@@ -370,6 +370,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
         return json(403, { error: "Forbidden" });
       }
       await expireDuePhotos(env);
+      await purgeExpiredPinAttempts(env);
       return json(200, { ok: true });
     }
 

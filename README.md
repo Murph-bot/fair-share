@@ -102,7 +102,7 @@ You can also use `fairshare pull` / `fairshare push` with `--host` or `FAIRSHARE
 ### Cloudflare setup
 
 - Bindings (see `wrangler.jsonc`): D1 `fairshare-db`, R2 `fairshare-photos`, KV `PIN_ATTEMPTS`.
-- Schema: `wrangler d1 execute fairshare-db --remote --file db/schema.sql` (and `--local` for dev).
+- Schema: `wrangler d1 execute fairshare-db --remote --file db/schema.sql` (and `--local` for dev). Re-run it after pulling schema changes; every statement is `IF NOT EXISTS`. The `pin_attempts` table must exist before deploying the D1 PIN limiter.
 - Secrets: `npx wrangler pages secret put PHOTO_PIN_PEPPER` and `npx wrangler pages secret put CRON_SECRET` (local values go in `.dev.vars`).
 - Deploy: `npm run build:pages && npx wrangler pages deploy web/dist`.
 - Photo expiry cron: separate Worker in `cron-worker/` (`wrangler deploy` from that folder) calls `/api/admin/expire-photos` daily with `CRON_SECRET`.

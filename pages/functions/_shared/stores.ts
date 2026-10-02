@@ -3,6 +3,8 @@ import type { Env, R2Metadata } from "./env";
 
 const PIN_ATTEMPT_LIMIT = 8;
 const PIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
+const PIN_TRIP_ATTEMPT_LIMIT = 50;
+const PIN_TRIP_WINDOW_SECONDS = 24 * 60 * 60;
 
 // ---------------------------------------------------------------- trips (D1)
 
@@ -165,32 +167,83 @@ export async function listAllPhotoKeys(
 
 // ----------------------------------------------------- PIN attempts (KV, TTL)
 
-function attemptKey(tripId: string, ip: string): string {
-  return `pin:attempts:${tripId}:${ip.replaceAll(":", "_").slice(0, 80)}`;
+/**
+ * Bucket an address for rate limiting. IPv6 hosts usually control a whole
+ * /64, so rotating the interface id must not buy fresh attempts.
+ */
+export function ipBucket(ip: string): string {
+  if (!ip.includes(":")) {
+    return ip.slice(0, 64);
+  }
+  const [head, tail] = ip.toLowerCase().split("::", 2);
+  const headParts = head ? head.split(":") : [];
+  const tailParts = tail === undefined ? [] : tail ? tail.split(":") : [];
+  const missing = Math.max(0, 8 - headParts.length - tailParts.length);
+  const full = [...headParts, ...Array<string>(missing).fill("0"), ...tailParts];
+  return `${full.slice(0, 4).map((part) => part.replace(/^0+(?=.)/, "")).join(":")}::/64`;
 }
 
-type AttemptState = { count: number; resetAt: number };
+function attemptKey(tripId: string, ip: string): string {
+  return `pin:attempts:${tripId}:${ipBucket(ip).replaceAll(":", "_").slice(0, 80)}`;
+}
 
-export async function assertPinAllowed(env: Env, tripId: string, ip: string): Promise<void> {
-  const raw = (await env.PIN_ATTEMPTS.get(attemptKey(tripId, ip), "json")) as AttemptState | null;
+function tripAttemptKey(tripId: string): string {
+  return `pin:trip:${tripId}`;
+}
+
+// Atomic increment-and-read in D1 (single writer), so parallel guesses
+// cannot all pass a read-then-write check the way they could with KV.
+const RESERVE_SQL = `INSERT INTO pin_attempts (key, count, reset_at) VALUES (?1, 1, ?2)
+  ON CONFLICT(key) DO UPDATE SET
+    count = CASE WHEN pin_attempts.reset_at <= ?3 THEN 1 ELSE pin_attempts.count + 1 END,
+    reset_at = CASE WHEN pin_attempts.reset_at <= ?3 THEN excluded.reset_at ELSE pin_attempts.reset_at END
+  RETURNING count`;
+
+async function bump(env: Env, key: string, windowSeconds: number): Promise<number> {
   const now = Date.now();
-  if (raw && raw.resetAt > now && raw.count >= PIN_ATTEMPT_LIMIT) {
+  const row = await env.FAIRSHARE_DB.prepare(RESERVE_SQL)
+    .bind(key, now + windowSeconds * 1000, now)
+    .first<{ count: number }>();
+  return row?.count ?? Number.MAX_SAFE_INTEGER;
+}
+
+async function currentCount(env: Env, key: string): Promise<number> {
+  const row = await env.FAIRSHARE_DB.prepare("SELECT count FROM pin_attempts WHERE key = ?1 AND reset_at > ?2")
+    .bind(key, Date.now())
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
+/** Read-only check (used before setting a PIN on a grandfathered trip). */
+export async function assertPinAllowed(env: Env, tripId: string, ip: string): Promise<void> {
+  if (
+    (await currentCount(env, attemptKey(tripId, ip))) >= PIN_ATTEMPT_LIMIT ||
+    (await currentCount(env, tripAttemptKey(tripId))) >= PIN_TRIP_ATTEMPT_LIMIT
+  ) {
     throw new RateLimitError("Too many PIN attempts. Try again later.");
   }
 }
 
-export async function recordPinFailure(env: Env, tripId: string, ip: string): Promise<void> {
-  const key = attemptKey(tripId, ip);
-  const raw = (await env.PIN_ATTEMPTS.get(key, "json")) as AttemptState | null;
-  const now = Date.now();
-  const active = raw && raw.resetAt > now;
-  const resetAt = active ? raw.resetAt : now + PIN_ATTEMPT_WINDOW_SECONDS * 1000;
-  const count = active ? raw.count + 1 : 1;
-  await env.PIN_ATTEMPTS.put(key, JSON.stringify({ count, resetAt }), {
-    expirationTtl: PIN_ATTEMPT_WINDOW_SECONDS,
-  });
+/**
+ * Count this attempt before the PIN is checked. Throws once the per-IP
+ * (8 per 15 min) or per-trip (50 per day) budget is used up.
+ */
+export async function reservePinAttempt(env: Env, tripId: string, ip: string): Promise<void> {
+  const perIp = await bump(env, attemptKey(tripId, ip), PIN_ATTEMPT_WINDOW_SECONDS);
+  const perTrip = await bump(env, tripAttemptKey(tripId), PIN_TRIP_WINDOW_SECONDS);
+  if (perIp > PIN_ATTEMPT_LIMIT || perTrip > PIN_TRIP_ATTEMPT_LIMIT) {
+    throw new RateLimitError("Too many PIN attempts. Try again later.");
+  }
 }
 
+/** After a correct PIN: reset this IP's counter and refund the trip-wide slot. */
 export async function clearPinFailures(env: Env, tripId: string, ip: string): Promise<void> {
-  await env.PIN_ATTEMPTS.delete(attemptKey(tripId, ip));
+  await env.FAIRSHARE_DB.prepare("DELETE FROM pin_attempts WHERE key = ?1").bind(attemptKey(tripId, ip)).run();
+  await env.FAIRSHARE_DB.prepare("UPDATE pin_attempts SET count = MAX(count - 1, 0) WHERE key = ?1")
+    .bind(tripAttemptKey(tripId))
+    .run();
+}
+
+export async function purgeExpiredPinAttempts(env: Env): Promise<void> {
+  await env.FAIRSHARE_DB.prepare("DELETE FROM pin_attempts WHERE reset_at <= ?1").bind(Date.now()).run();
 }
