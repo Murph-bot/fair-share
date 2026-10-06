@@ -25,7 +25,7 @@ Expo mobile app, shared domain package, Python CLI/tests.
 
 ## Deploy
 
-- `npm run build:pages` **then** `wrangler pages deploy web/dist --project-name fair-share-trips`
+- `npm run deploy` (runs `build:pages`, checks `web/dist/_worker.js`, then `wrangler pages deploy web/dist --project-name fair-share-trips`)
 - **Never** run a bare `vite build` / `npm run build` before deploying: it
   rebuilds `web/dist` without `_worker.js` and the API 405s in production
   (has happened twice).
