@@ -6,6 +6,7 @@ import {
   normalizePin,
   pinMatches,
   signPhotoAccess,
+  timingSafeEqual,
   verifySessionToken,
 } from "../../../packages/domain/src/pin";
 import {
@@ -334,7 +335,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
         return json(405, { error: "Method not allowed" });
       }
       const secret = bearerToken(req);
-      if (!env.CRON_SECRET || secret !== env.CRON_SECRET) {
+      if (!env.CRON_SECRET || !secret || !timingSafeEqual(secret, env.CRON_SECRET)) {
         return json(403, { error: "Forbidden" });
       }
       await expireDuePhotos(env);
