@@ -89,7 +89,7 @@ function expenseSearchableText(e: Expense): string {
     .toLowerCase();
 }
 
-function expenseCards(trip: Trip): string {
+export function expenseCards(trip: Trip): string {
   if (trip.expenses.length === 0) {
     return `<p class="muted">${t("No expenses yet. Add one above.")}</p>`;
   }
@@ -103,7 +103,9 @@ function expenseCards(trip: Trip): string {
           ? ` · ${t("weights")} ${escapeHtml(e.weights.join(":"))}`
           : "";
           const currency = e.currency ?? trip.currency ?? "EUR";
-          const extras: string[] = [e.date, e.category, e.note].filter((x): x is string => Boolean(x));
+          const extras: string[] = [e.date, e.category, e.note]
+            .filter((x): x is string => Boolean(x))
+            .map(escapeHtml);
           if (e.tax_cents !== undefined || e.tip_cents !== undefined) {
             extras.push(
               `${t("tax")} ${centsToCurrency(e.tax_cents ?? 0, currency)}${e.tip_cents !== undefined ? ` · ${t("tip")} ${centsToCurrency(e.tip_cents ?? 0, currency)}` : ""}`,
