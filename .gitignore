@@ -26,5 +26,6 @@ mobile/.expo/
 mobile/dist/
 mobile/ios/
 mobile/android/
-**/.claude/
+.claude/settings.local.json
+.claude/worktrees/
 .netlify/
