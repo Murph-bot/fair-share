@@ -5,7 +5,7 @@
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": []
   },
   "vars": {
     "CRON_TARGET_URL": "https://fair-share-trips.pages.dev/api/admin/expire-photos"
