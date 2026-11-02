@@ -6,8 +6,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f4f0e6",
-  "theme_color": "#f4f0e6",
+  "background_color": "#FAF7F2",
+  "theme_color": "#FAF7F2",
   "categories": ["finance", "travel"],
   "icons": [
     {

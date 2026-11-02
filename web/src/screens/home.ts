@@ -70,11 +70,11 @@ export function renderHome(root: HTMLElement): void {
           ${themeButtonHtml(themeLabel)}
         </div>
       </div>
-      <h1>${t("Split trip expenses fairly")}</h1>
-      <p class="lede">${t("Create a trip, add people, and share the link. No accounts, no ads.")}</p>
+      <h1>${t("Who owes what after the trip?")}</h1>
+      <p class="lede">${t("Name it, add people, share the link. No accounts, no ads.")}</p>
 
       <form id="create-form" class="stack">
-        <label for="trip-name">${t("Trip name")}</label>
+        <label for="trip-name">${t("What's the trip called?")}</label>
         <input id="trip-name" name="name" type="text" required maxlength="80" autocomplete="off" placeholder="${t("Athens weekend")}">
         <p id="create-error" class="err" hidden></p>
         <button type="submit" class="primary">${t("Create trip")}</button>
@@ -93,7 +93,7 @@ export function renderHome(root: HTMLElement): void {
         <div class="row">
           ${TRIP_TEMPLATES.map(
             (template) =>
-              `<button type="button" class="secondary" data-template="${escapeHtml(template.id)}">${t(template.name)}</button>`,
+              `<button type="button" class="secondary chip-btn" data-template="${escapeHtml(template.id)}">${t(template.name)}</button>`,
           ).join("")}
         </div>
         <p id="template-error" class="err" hidden></p>
@@ -112,7 +112,7 @@ export function renderHome(root: HTMLElement): void {
       <section class="block">
         <h2>${t("Open JSON")}</h2>
         <p class="muted">${t("Money only. Photos stay on the hosted trip and are not in the file.")}</p>
-        <input id="import-json" class="sr" type="file" accept="application/json,.json">
+        <input id="import-json" class="sr" type="file" tabindex="-1" aria-label="${t("Choose JSON file")}" accept="application/json,.json">
         <button type="button" id="import-json-btn" class="secondary">${t("Choose JSON file")}</button>
         <p id="import-error" class="err" hidden></p>
       </section>
@@ -123,7 +123,7 @@ export function renderHome(root: HTMLElement): void {
         <div class="row">
           <button type="button" id="backup-export" class="secondary">${t("Export backup")}</button>
           <button type="button" id="backup-import-btn" class="secondary">${t("Restore backup")}</button>
-          <input id="backup-import" class="sr" type="file" accept="application/json,.json">
+          <input id="backup-import" class="sr" type="file" tabindex="-1" aria-label="${t("Restore backup")}" accept="application/json,.json">
         </div>
         <p id="backup-error" class="err" hidden></p>
       </section>
