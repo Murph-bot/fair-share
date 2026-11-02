@@ -1,4 +1,4 @@
-const CACHE = "fairshare-shell-v2";
+const CACHE = "fairshare-shell-v3";
 const TRIP_CACHE_PREFIX = "fairshare-trip-";
 
 self.addEventListener("install", (event) => {
@@ -6,7 +6,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE)
       .then((cache) =>
-        cache.addAll(["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png"]),
+        cache.addAll(["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png", "/fonts/Commissioner.woff2", "/fonts/JetBrainsMono.woff2"]),
       ),
   );
   self.skipWaiting();

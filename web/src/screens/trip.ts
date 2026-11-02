@@ -30,6 +30,8 @@ import { isOffline, onOfflineChange } from "../offline";
 import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
 import { bindMoments, momentsSection } from "./moments";
+import { buildResult, formatMoney, initials, settleSentence, type Lang } from "../result";
+import { getLanguage } from "../i18n";
 
 let saveLock = false;
 
@@ -71,7 +73,7 @@ function peopleList(trip: Trip): string {
   return `<ul class="people">${trip.people
     .map(
       (p, index) =>
-        `<li><span class="person-name">${escapeHtml(p)}</span>` +
+        `<li><span class="blob blob-${index % 4} fruit-${fruitClass(index)}" aria-hidden="true">${escapeHtml(initials(p))}</span><span class="person-name">${escapeHtml(p)}</span>` +
         ` <button type="button" class="text-btn" data-rename-person="${escapeHtml(p)}" aria-label="${t("Rename {{name}}", { name: escapeHtml(p) })}">${t("Rename")}</button>` +
         (index > 0 ? ` <button type="button" class="text-btn" data-move-person="${escapeHtml(p)}" data-direction="up" aria-label="${t("Move {{name}} up", { name: escapeHtml(p) })}">↑</button>` : "") +
         (index < trip.people.length - 1
@@ -80,6 +82,78 @@ function peopleList(trip: Trip): string {
         `</li>`,
     )
     .join("")}</ul>`;
+}
+
+const FRUIT_CLASSES = ["mango", "lagoon", "watermelon", "grape", "kiwi", "cobalt", "peach"];
+function fruitClass(index: number): string {
+  return FRUIT_CLASSES[index % FRUIT_CLASSES.length];
+}
+
+function lang(): Lang {
+  return getLanguage() === "el" ? "el" : "en";
+}
+
+function resultCard(trip: Trip): string {
+  const r = buildResult(trip, lang(), { total: t("TOTAL"), perPerson: t("SHARE") });
+  const money = (c: number, signed = false) => formatMoney(c, r.currency, lang(), { signed });
+  const n = trip.people.length;
+  const transfersOpen = r.transfers.filter((p) => !paymentStatus(trip, p).completed).length;
+  const headline =
+    trip.expenses.length === 0
+      ? t("Add an expense and the answer appears here.")
+      : transfersOpen === 0
+        ? t("Everyone's square.")
+        : transfersOpen === 1
+          ? t("1 payment to settle")
+          : t("{{count}} payments to settle", { count: String(transfersOpen) });
+  const formula =
+    n > 0 && trip.expenses.length > 0
+      ? t("{{count}} people · total {{total}}", { count: String(n), total: money(r.totalCents) })
+      : "";
+  const bar = r.segments
+    .map(
+      (seg) =>
+        `<div class="seg fruit-${seg.fruit}" style="flex:${seg.weight} 1 0" title="${escapeHtml(seg.name)} · ${seg.percent.toFixed(1)}%"><span aria-hidden="true">${escapeHtml(seg.initials)}</span></div>`,
+    )
+    .join("");
+  const barLabel = r.segments.map((seg) => `${seg.name} ${Math.round(seg.percent)}%`).join(", ");
+  const rows = r.people
+    .map((p) => {
+      const word = p.status === "gets" ? t("gets back") : p.status === "owes" ? t("owes") : t("square");
+      const sign = p.status === "gets" ? "+" : p.status === "owes" ? "\u2212" : "\u2713";
+      return `<li class="net-row ${p.status}">
+        <span class="blob blob-${p.shape} fruit-${p.fruit}${p.status === "square" && trip.expenses.length > 0 ? " squish" : ""}" aria-hidden="true">${escapeHtml(p.initials)}</span>
+        <span class="net-name"><strong>${escapeHtml(p.name)}</strong><span class="status-chip ${p.status}">${sign} ${word}</span></span>
+        <span class="net-amt num">${money(p.netCents, true)}</span>
+      </li>`;
+    })
+    .join("");
+  const receipt = r.receipt
+    .map((l) =>
+      l.kind === "rule"
+        ? `<span class="rcpt-rule" aria-hidden="true"></span>`
+        : `<span class="rcpt-line ${l.kind}"><span>${escapeHtml(l.left)}</span><span>${escapeHtml(l.right)}</span></span>`,
+    )
+    .join("");
+  const mini = `<div class="even-bar mini" aria-hidden="true">${bar}</div>`;
+  return `
+    <section class="result-card" id="result-card" aria-labelledby="result-title" aria-live="polite">
+      <p class="eyebrow">${t("Who owes what?")}</p>
+      <h2 id="result-title" class="answer">${escapeHtml(headline)}</h2>
+      ${formula ? `<p class="formula muted num">${escapeHtml(formula)}</p>` : ""}
+      ${n > 0 ? `<div class="even-bar num" role="img" aria-label="${escapeHtml(t("Even Bar: each person's share") + " — " + barLabel)}">${bar}</div>
+      <p class="muted small">${t("Even Bar · each person's share")}</p>` : ""}
+      ${n > 0 ? `<ul class="nets">${rows}</ul>` : ""}
+      <h3 class="settle-title">${t("Who pays whom")}</h3>
+      ${settleBlock(trip)}
+      ${trip.expenses.length > 0 ? `<details class="receipt" id="receipt"><summary>${t("Show the math")}</summary>
+        <div class="rcpt num"><span class="rcpt-head">${t("FAIR SHARE · RECEIPT")}</span>${receipt}</div></details>` : ""}
+    </section>
+    <button type="button" class="result-bar" id="result-bar" hidden aria-label="${t("Jump to the result")}">
+      <span class="result-bar-amt num">${trip.expenses.length > 0 ? money(r.totalCents) : ""}</span>
+      ${mini}
+      <span class="result-bar-note">${escapeHtml(headline)}</span>
+    </button>`;
 }
 
 function expenseSearchableText(e: Expense): string {
@@ -131,23 +205,6 @@ export function expenseCards(trip: Trip): string {
       </li>`;
     })
     .join("")}</ul>`;
-}
-
-function balancesBlock(trip: Trip): string {
-  if (trip.expenses.length === 0) {
-    return `<p class="muted">${t("No expenses recorded. Add expenses to see who owes what.")}</p>`;
-  }
-  const balances = computeBalances(trip);
-  const currency = trip.currency ?? "EUR";
-  const rows = Object.keys(balances)
-    .sort((a, b) => a.localeCompare(b))
-    .map((person) => {
-      const amount = balances[person];
-      const sign = amount > 0 ? "+" : "";
-      return `<li><span>${escapeHtml(person)}</span><span class="${amount < 0 ? "neg" : "pos"}">${sign}${centsToCurrency(amount, currency)}</span></li>`;
-    })
-    .join("");
-  return `<p class="muted explainer">${t("Positive = owed to this person. Negative = this person owes money.")}</p><ul class="ledger">${rows}</ul>`;
 }
 
 function summaryHtml(trip: Trip): string {
@@ -247,7 +304,7 @@ function settleBlock(trip: Trip): string {
           `<button type="button" class="text-btn" data-partial-payment data-from="${escapeHtml(p.frm)}" data-to="${escapeHtml(p.to)}" data-amount="${p.amount_cents}">${t("Pay partial")}</button>`;
       return (
         `<li class="${status.completed ? "completed" : ""}">` +
-        `<span class="payment-line">${escapeHtml(p.frm)} → ${escapeHtml(p.to)} <strong>${amountLabel}</strong>${progress}</span>` +
+        `<span class="payment-line">${escapeHtml(settleSentence(p.frm, p.to, p.amount_cents, currency, lang()))}${progress}</span>` +
         `<span class="payment-actions">${shareButton}${recordAction}</span></li>`
       );
     })
@@ -445,8 +502,10 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     <p id="banner" class="err" role="alert" aria-live="assertive" hidden></p>
     <p id="offline-banner" class="offline-banner" hidden>${t("You're offline — showing saved data.")}</p>
     <main class="page trip">
+      <div class="trip-grid">
+      <div class="trip-inputs">
       <section class="block">
-        <h2>${t("People")}</h2>
+        <h2>${t("Who came along?")}</h2>
         ${peopleList(trip)}
         <form id="person-form" class="row">
           <label class="sr" for="person-name">${t("Name")}</label>
@@ -456,7 +515,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         <p id="person-error" class="err" role="alert" aria-live="assertive" hidden></p>
       </section>
       <section class="block">
-        <h2>${editing ? t("Edit expense") : t("Add expense")}</h2>
+        <h2>${editing ? t("Edit expense") : t("What did someone pay for?")}</h2>
         ${expenseForm(trip, editing)}
       </section>
       <section class="block">
@@ -464,18 +523,15 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         ${expenseCards(trip)}
       </section>
       <section class="block">
-        <h2>${t("Balances")}</h2>
-        ${balancesBlock(trip)}
-      </section>
-      <section class="block">
         <h2>${t("Overview")}</h2>
         ${statsBlock(trip)}
       </section>
-      <section class="block">
-        <h2>${t("Who pays whom")}</h2>
-        ${settleBlock(trip)}
-      </section>
-      ${momentsSection()}
+      </div>
+      <aside class="trip-result">
+        ${resultCard(trip)}
+        ${momentsSection()}
+      </aside>
+      </div>
       <section class="block print-only" id="print-summary" aria-hidden="true">
         ${summaryHtml(trip)}
       </section>
@@ -878,6 +934,24 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   if (offlineBanner) {
     // paint() rebuilt the banner markup — restore live state on the new node.
     offlineBanner.hidden = !isOffline();
+  }
+
+  const receiptEl = root.querySelector("#receipt") as HTMLDetailsElement | null;
+  if (receiptEl && window.matchMedia("(min-width: 900px)").matches) {
+    receiptEl.open = true;
+  }
+  const card = root.querySelector("#result-card") as HTMLElement | null;
+  const bar = root.querySelector("#result-bar") as HTMLButtonElement | null;
+  if (card && bar && "IntersectionObserver" in window) {
+    const mobile = window.matchMedia("(max-width: 899px)");
+    const observer = new IntersectionObserver(([entry]) => {
+      bar.hidden = !mobile.matches || entry.isIntersecting;
+    });
+    observer.observe(card);
+    window.addEventListener("fairshare:route", () => observer.disconnect(), { once: true });
+    bar.addEventListener("click", () => {
+      card.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    });
   }
 
   bindMoments(root, id, trip);
