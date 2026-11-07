@@ -1,4 +1,5 @@
-const CACHE = "fairshare-shell-v3";
+const BASE = new URL(self.registration.scope).pathname;
+const CACHE = "fairshare-shell-v4";
 const TRIP_CACHE_PREFIX = "fairshare-trip-";
 
 self.addEventListener("install", (event) => {
@@ -6,7 +7,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE)
       .then((cache) =>
-        cache.addAll(["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icon-180.png", "/icon-192.png", "/fonts/Commissioner.woff2", "/fonts/JetBrainsMono.woff2"]),
+        cache.addAll(["", "index.html", "manifest.webmanifest", "icon.svg", "icon-180.png", "icon-192.png", "fonts/Commissioner.woff2", "fonts/JetBrainsMono.woff2"].map((path) => BASE + path)),
       ),
   );
   self.skipWaiting();
@@ -37,8 +38,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const path = url.pathname.slice(BASE.length - 1);
+
   // Trip data: network-first so fresh data wins, cached copy as offline fallback.
-  const tripMatch = /^\/api\/trips\/([a-f0-9]{32})$/.exec(url.pathname);
+  const tripMatch = /^\/api\/trips\/([a-f0-9]{32})$/.exec(path);
   if (tripMatch) {
     const id = tripMatch[1];
     event.respondWith(
@@ -59,7 +62,7 @@ self.addEventListener("fetch", (event) => {
 
   // Photos: cache-first, but only when the response is publicly cacheable
   // (unlocked trips). PIN-locked photos are private and never persisted.
-  if (url.pathname.startsWith("/uploads/photos/")) {
+  if (path.startsWith("/uploads/photos/")) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
         const cached = await cache.match(event.request);
@@ -83,10 +86,10 @@ self.addEventListener("fetch", (event) => {
       fetch(event.request)
         .then((response) => {
           const clone = response.clone();
-          caches.open(CACHE).then((cache) => cache.put("/index.html", clone));
+          caches.open(CACHE).then((cache) => cache.put(BASE + "index.html", clone));
           return response;
         })
-        .catch(() => caches.match("/index.html")),
+        .catch(() => caches.match(BASE + "index.html")),
     );
     return;
   }

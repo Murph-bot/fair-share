@@ -31,6 +31,10 @@ Expo mobile app, shared domain package, Python CLI/tests.
   (has happened twice).
 - Secrets live in Cloudflare (`PHOTO_PIN_PEPPER`, `CRON_SECRET` on both Pages
   and the cron worker) and local `.dev.vars` (gitignored).
+- `pithelo.com/fairshare` forwards to this app (`apps/web/src/fairshare/proxy.ts`
+  in `Murph-bot/pithelo`), which rewrites `<base href="/">` in `web/index.html`.
+  Keep that tag exact, and write client URLs relative to it (`api/trips`, not
+  `/api/trips`). `web/tests/paths.test.ts` fails on root-absolute ones.
 
 ## Product invariants
 

@@ -169,7 +169,7 @@ describe("deletePhoto client API", () => {
 
     await deletePhoto(validTripId, validPhotoId);
 
-    expect(fetchMock).toHaveBeenCalledWith(`/api/trips/${validTripId}/photos/${validPhotoId}`, {
+    expect(fetchMock).toHaveBeenCalledWith(`api/trips/${validTripId}/photos/${validPhotoId}`, {
       method: "DELETE",
       headers: {},
     });
@@ -192,7 +192,7 @@ describe("deletePhoto client API", () => {
 
     await deletePhoto(validTripId, validPhotoId);
 
-    expect(fetchMock).toHaveBeenCalledWith(`/api/trips/${validTripId}/photos/${validPhotoId}`, {
+    expect(fetchMock).toHaveBeenCalledWith(`api/trips/${validTripId}/photos/${validPhotoId}`, {
       method: "DELETE",
       headers: {
         Authorization: "Bearer test-session-token",
