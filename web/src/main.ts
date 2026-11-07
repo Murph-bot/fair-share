@@ -5,7 +5,7 @@ import { captureInstallPrompt } from "./install";
 import { initCrashReporting } from "./crash";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
-import { appPath } from "./paths";
+import { appPath, isAppPath } from "./paths";
 
 initTheme();
 initLanguage();
@@ -62,7 +62,10 @@ document.addEventListener("click", (event) => {
     return;
   }
   const url = new URL(link.href);
-  if (appPath(url.pathname, document.baseURI).startsWith("/api/")) {
+  if (
+    !isAppPath(url.pathname, document.baseURI) ||
+    appPath(url.pathname, document.baseURI).startsWith("/api/")
+  ) {
     return;
   }
   event.preventDefault();
