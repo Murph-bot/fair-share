@@ -5,6 +5,7 @@ const domainIndex = fileURLToPath(new URL("../packages/domain/src/index.ts", imp
 const domainRoot = fileURLToPath(new URL("../packages/domain/src", import.meta.url));
 
 export default defineConfig({
+  base: "./",
   resolve: {
     alias: [
       {

@@ -29,7 +29,7 @@ function setLocalError(el: HTMLElement | null, message: string | null): void {
 
 function safePhotoUrl(url: string): string | undefined {
   if (url.startsWith("/uploads/photos/")) {
-    return url;
+    return url.slice(1);
   }
   return undefined;
 }

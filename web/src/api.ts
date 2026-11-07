@@ -37,7 +37,7 @@ export async function createRemoteTrip(name: string): Promise<{
   pin: string;
   photos_token: string;
 }> {
-  const res = await fetch("/api/trips", {
+  const res = await fetch("api/trips", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
@@ -58,7 +58,7 @@ export async function createRemoteTrip(name: string): Promise<{
 }
 
 export async function fetchTrip(id: string): Promise<PublicTrip> {
-  const res = await fetch(`/api/trips/${id}`);
+  const res = await fetch(`api/trips/${id}`);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
@@ -98,7 +98,7 @@ export async function createRemoteTemplateTrip(
 }
 
 export async function deleteRemoteTrip(id: string): Promise<void> {
-  const res = await fetch(`/api/trips/${id}`, {
+  const res = await fetch(`api/trips/${id}`, {
     method: "DELETE",
   });
   if (!res.ok) {
@@ -107,7 +107,7 @@ export async function deleteRemoteTrip(id: string): Promise<void> {
 }
 
 export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip> {
-  const res = await fetch(`/api/trips/${id}`, {
+  const res = await fetch(`api/trips/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -141,7 +141,7 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
 }
 
 export async function unlockPhotos(tripId: string, pin: string): Promise<string> {
-  const res = await fetch(`/api/trips/${tripId}/session`, {
+  const res = await fetch(`api/trips/${tripId}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ pin }),
@@ -157,7 +157,7 @@ export async function unlockPhotos(tripId: string, pin: string): Promise<string>
 }
 
 export async function fetchPhotos(tripId: string): Promise<PhotoRecord[]> {
-  const res = await fetch(`/api/trips/${tripId}/photos`, {
+  const res = await fetch(`api/trips/${tripId}/photos`, {
     headers: authHeaders(tripId),
   });
   if (!res.ok) {
@@ -180,7 +180,7 @@ export async function uploadPhoto(
   if (extras?.original) {
     data.append("original", new File([extras.original], "original.jpg", { type: "image/jpeg" }));
   }
-  const res = await fetch(`/api/trips/${tripId}/photos`, {
+  const res = await fetch(`api/trips/${tripId}/photos`, {
     method: "POST",
     headers: authHeaders(tripId),
     body: data,
@@ -196,7 +196,7 @@ export async function uploadPhoto(
 }
 
 export async function deletePhoto(tripId: string, photoId: string): Promise<void> {
-  const res = await fetch(`/api/trips/${tripId}/photos/${photoId}`, {
+  const res = await fetch(`api/trips/${tripId}/photos/${photoId}`, {
     method: "DELETE",
     headers: authHeaders(tripId),
   });
@@ -209,7 +209,7 @@ export async function lockTripPhotos(
   tripId: string,
   pin?: string,
 ): Promise<{ pin: string; photos_token: string }> {
-  const res = await fetch(`/api/trips/${tripId}/pin`, {
+  const res = await fetch(`api/trips/${tripId}/pin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(pin ? { pin } : {}),

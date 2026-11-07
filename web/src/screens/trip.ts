@@ -478,7 +478,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   root.innerHTML = `
     <header class="topbar">
       <div>
-        <p class="kicker"><a href="/"><img src="/icon.svg" alt="" class="brand-mark">${t("Fair Share")}</a></p>
+        <p class="kicker"><a href="./"><img src="icon.svg" alt="" class="brand-mark">${t("Fair Share")}</a></p>
         <h1>${escapeHtml(trip.name)}</h1>
       </div>
       <div class="topbar-actions">
@@ -735,7 +735,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     try {
       setBusy(root, true);
       await deleteRemoteTrip(id);
-      history.pushState({}, "", "/");
+      history.pushState({}, "", "./");
       window.dispatchEvent(new Event("fairshare:route"));
     } catch (err) {
       if (!saveLock) {
@@ -976,7 +976,7 @@ export async function renderTrip(root: HTMLElement, id: string): Promise<void> {
     root.innerHTML = `
       <main class="page">
         <p class="err">${escapeHtml(message)}</p>
-        <p><a href="/">${t("Back to home")}</a></p>
+        <p><a href="./">${t("Back to home")}</a></p>
         <button type="button" id="reload-trip" class="secondary">${t("Try again")}</button>
       </main>
     `;

@@ -5,6 +5,7 @@ import { captureInstallPrompt } from "./install";
 import { initCrashReporting } from "./crash";
 import { renderHome } from "./screens/home";
 import { renderTrip } from "./screens/trip";
+import { appPath } from "./paths";
 
 initTheme();
 initLanguage();
@@ -17,7 +18,7 @@ if (!app) {
 const root: HTMLElement = app;
 
 function route(): void {
-  const path = window.location.pathname.replace(/\/$/, "") || "/";
+  const path = appPath(window.location.pathname, document.baseURI);
   const match = /^\/t\/([a-f0-9]{32})$/.exec(path);
   if (path === "/") {
     renderHome(root);
@@ -30,7 +31,7 @@ function route(): void {
   root.innerHTML = `
     <main class="page">
       <h1>Not found</h1>
-      <p><a href="/">Back to home</a></p>
+      <p><a href="./">Back to home</a></p>
     </main>
   `;
 }
@@ -61,7 +62,7 @@ document.addEventListener("click", (event) => {
     return;
   }
   const url = new URL(link.href);
-  if (url.pathname.startsWith("/api/")) {
+  if (appPath(url.pathname, document.baseURI).startsWith("/api/")) {
     return;
   }
   event.preventDefault();
@@ -72,5 +73,5 @@ document.addEventListener("click", (event) => {
 route();
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  void navigator.serviceWorker.register("/sw.js");
+  void navigator.serviceWorker.register("sw.js");
 }

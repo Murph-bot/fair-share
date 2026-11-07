@@ -10,6 +10,7 @@ import { getInstallPrompt, isStandalone, runInstallPrompt } from "../install";
 import { backupJson, parseBackup, parseTrip, t, TRIP_ID_RE, TRIP_TEMPLATES } from "@fairshare/domain";
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
+import { tripIdFromLink } from "../paths";
 import { savePhotoPin, savePhotoToken } from "../photo-session";
 import { loadRecents, rememberRecent } from "../recents";
 import { getTheme, languageButtonHtml, nextLanguage, themeButtonHtml, toggleTheme } from "../theme";
@@ -25,17 +26,7 @@ function extractTripId(raw: string): string | null {
     return lower;
   }
 
-  try {
-    const url = new URL(input);
-    const match = /^\/t\/([a-f0-9]{32})$/i.exec(url.pathname);
-    if (match) {
-      return match[1].toLowerCase();
-    }
-  } catch {
-    // Not a URL.
-  }
-
-  return null;
+  return tripIdFromLink(input);
 }
 
 export function renderHome(root: HTMLElement): void {
@@ -46,7 +37,7 @@ export function renderHome(root: HTMLElement): void {
       : `<ul class="recents">${recents
           .map(
             (item) =>
-              `<li><a href="/t/${encodeURIComponent(item.id)}">${escapeHtml(item.name)}</a></li>`,
+              `<li><a href="t/${encodeURIComponent(item.id)}">${escapeHtml(item.name)}</a></li>`,
           )
           .join("")}</ul>`;
 
@@ -64,7 +55,7 @@ export function renderHome(root: HTMLElement): void {
   root.innerHTML = `
     <main class="page home">
       <div class="home-header">
-        <p class="kicker"><img src="/icon.svg" alt="" class="brand-mark">${t("Fair Share")}</p>
+        <p class="kicker"><img src="icon.svg" alt="" class="brand-mark">${t("Fair Share")}</p>
         <div class="home-toggles">
           ${languageButtonHtml()}
           ${themeButtonHtml(themeLabel)}
@@ -185,7 +176,7 @@ export function renderHome(root: HTMLElement): void {
       savePhotoPin(id, pin);
       savePhotoToken(id, photos_token);
       announce(t("Trip created. PIN: {{pin}}", { pin }));
-      history.pushState({}, "", `/t/${id}`);
+      history.pushState({}, "", `t/${id}`);
       window.dispatchEvent(new Event("fairshare:route"));
     } catch (err) {
       errorEl.hidden = false;
@@ -202,7 +193,7 @@ export function renderHome(root: HTMLElement): void {
       savePhotoPin(id, pin);
       savePhotoToken(id, photos_token);
       announce(t("Trip created. PIN: {{pin}}", { pin }));
-      history.pushState({}, "", `/t/${id}`);
+      history.pushState({}, "", `t/${id}`);
       window.dispatchEvent(new Event("fairshare:route"));
     } catch (err) {
       demoError.hidden = false;
@@ -223,7 +214,7 @@ export function renderHome(root: HTMLElement): void {
         savePhotoPin(id, pin);
         savePhotoToken(id, photos_token);
         announce(t("Trip created. PIN: {{pin}}", { pin }));
-        history.pushState({}, "", `/t/${id}`);
+        history.pushState({}, "", `t/${id}`);
         window.dispatchEvent(new Event("fairshare:route"));
       } catch (err) {
         if (templateError) {
@@ -244,7 +235,7 @@ export function renderHome(root: HTMLElement): void {
       openError.textContent = t("Paste a Fair Share link or the 32-character trip ID");
       return;
     }
-    history.pushState({}, "", `/t/${id}`);
+    history.pushState({}, "", `t/${id}`);
     window.dispatchEvent(new Event("fairshare:route"));
   });
 
@@ -294,7 +285,7 @@ export function renderHome(root: HTMLElement): void {
       savePhotoPin(created.id, created.pin);
       savePhotoToken(created.id, created.photos_token);
       announce(`Trip imported: ${created.id}`);
-      history.pushState({}, "", `/t/${created.id}`);
+      history.pushState({}, "", `t/${created.id}`);
       window.dispatchEvent(new Event("fairshare:route"));
     } catch (err) {
       importError.hidden = false;
@@ -366,7 +357,7 @@ export function renderHome(root: HTMLElement): void {
       savePhotoPin(first.id, first.pin);
       savePhotoToken(first.id, first.photos_token);
       announce(t("Backup restored"));
-      history.pushState({}, "", `/t/${first.id}`);
+      history.pushState({}, "", `t/${first.id}`);
       window.dispatchEvent(new Event("fairshare:route"));
     } catch (err) {
       if (backupError) {

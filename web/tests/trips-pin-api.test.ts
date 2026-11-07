@@ -282,7 +282,7 @@ describe("lockTripPhotos client API", () => {
 
     const result = await lockTripPhotos(validTripId, "123456");
     expect(result).toEqual({ pin: "123456", photos_token: "tok-abc" });
-    expect(fetchMock).toHaveBeenCalledWith(`/api/trips/${validTripId}/pin`, {
+    expect(fetchMock).toHaveBeenCalledWith(`api/trips/${validTripId}/pin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pin: "123456" }),
@@ -298,7 +298,7 @@ describe("lockTripPhotos client API", () => {
 
     const result = await lockTripPhotos(validTripId);
     expect(result).toEqual({ pin: "654321", photos_token: "tok-xyz" });
-    expect(fetchMock).toHaveBeenCalledWith(`/api/trips/${validTripId}/pin`, {
+    expect(fetchMock).toHaveBeenCalledWith(`api/trips/${validTripId}/pin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
