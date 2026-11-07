@@ -8,6 +8,7 @@ import type { Env } from "../../pages/functions/_shared/env";
 
 const validTripId = "11111111111111111111111111111111";
 const validPhotoId = "22222222222222222222222222222222";
+const otherPhotoId = "33333333333333333333333333333333";
 
 function fakeJpeg(bytes = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]): Blob {
   return new Blob([new Uint8Array(bytes)], { type: "image/jpeg" });
@@ -269,6 +270,36 @@ describe("POST /api/trips/:id/photos with R2 originals", () => {
       `/uploads/photos/${validTripId}/${validPhotoId}?original=1`,
     );
     expect(photos.has(`${validTripId}/${validPhotoId}/original`)).toBe(true);
+  });
+
+  it("keeps the originalUrl when photos are listed again", async () => {
+    trips.set(validTripId, { name: "Trip", people: ["Alice"], expenses: [] });
+    const withOriginal = new FormData();
+    withOriginal.append("photo", fakeJpeg(), "test.jpg");
+    withOriginal.append("original", fakeJpeg(), "original.jpg");
+    withOriginal.append("photo_id", validPhotoId);
+    const displayOnly = new FormData();
+    displayOnly.append("photo", fakeJpeg(), "test.jpg");
+    displayOnly.append("photo_id", otherPhotoId);
+    for (const body of [withOriginal, displayOnly]) {
+      await handleApiRequest(
+        new Request(`https://example.com/api/trips/${validTripId}/photos`, { method: "POST", body }),
+        env,
+      );
+    }
+
+    const res = await handleApiRequest(
+      new Request(`https://example.com/api/trips/${validTripId}/photos`),
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { photos: Array<{ id: string; originalUrl: string | null }> };
+    expect(body.photos).toHaveLength(2);
+    expect(body.photos.find((photo) => photo.id === validPhotoId)?.originalUrl).toBe(
+      `/uploads/photos/${validTripId}/${validPhotoId}?original=1`,
+    );
+    expect(body.photos.find((photo) => photo.id === otherPhotoId)?.originalUrl).toBeNull();
   });
 
   it("returns 401 on a locked trip without a session token", async () => {
