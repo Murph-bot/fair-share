@@ -97,6 +97,7 @@ export async function listPhotos(
   tripId: string,
 ): Promise<Array<{ photoId: string; uploadedAt: string; hasOriginal: boolean }>> {
   const listed = await env.FAIRSHARE_PHOTOS.list({ prefix: `${tripId}/` });
+  const keys = new Set(listed.objects.map((obj) => obj.key));
   const photos: Array<{ photoId: string; uploadedAt: string; hasOriginal: boolean }> = [];
   for (const obj of listed.objects) {
     const rest = obj.key.slice(tripId.length + 1);
@@ -104,11 +105,10 @@ export async function listPhotos(
     if (!rest || rest.includes("/")) {
       continue;
     }
-    const uploadedAt = obj.customMetadata?.uploadedAt ?? obj.uploaded.toISOString();
     photos.push({
       photoId: rest,
-      uploadedAt,
-      hasOriginal: obj.customMetadata?.hasOriginal === "1",
+      uploadedAt: obj.uploaded.toISOString(),
+      hasOriginal: keys.has(originalKey(tripId, rest)),
     });
   }
   return photos;

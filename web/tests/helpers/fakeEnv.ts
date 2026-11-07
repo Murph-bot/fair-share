@@ -97,13 +97,13 @@ export function makeFakeEnv(): {
       const prefix = options?.prefix ?? "";
       const keys = [...photos.keys()].filter((key) => key.startsWith(prefix)).sort();
       return {
+        // Like real R2, list() leaves out customMetadata unless asked for it.
         objects: keys.map((key) => {
           const photo = photos.get(key) as FakePhoto;
           return {
             key,
             uploaded: photo.uploaded,
             size: photo.data.byteLength,
-            customMetadata: photo.metadata,
           };
         }),
         truncated: false,
