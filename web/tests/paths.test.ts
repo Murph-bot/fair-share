@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { appPath, tripIdFromLink } from "../src/paths";
+import { appPath, isAppPath, tripIdFromLink } from "../src/paths";
 
 const ROOT = "https://fair-share-trips.pages.dev/";
 const MOUNTED = "https://pithelo.com/fairshare/";
@@ -21,6 +21,22 @@ describe("appPath", () => {
 
   it("only removes a whole path segment", () => {
     expect(appPath("/fairshared", MOUNTED)).toBe("/fairshared");
+  });
+});
+
+describe("isAppPath", () => {
+  it("treats every path as the app's when the app is at the root", () => {
+    expect(isAppPath("/", ROOT)).toBe(true);
+    expect(isAppPath(`/t/${ID}`, ROOT)).toBe(true);
+  });
+
+  it("leaves the host site's pages to the browser when the app is mounted", () => {
+    expect(isAppPath("/fairshare", MOUNTED)).toBe(true);
+    expect(isAppPath(`/fairshare/t/${ID}`, MOUNTED)).toBe(true);
+    expect(isAppPath("/archive", MOUNTED)).toBe(false);
+    expect(isAppPath("/littlefriends/", MOUNTED)).toBe(false);
+    expect(isAppPath("/", MOUNTED)).toBe(false);
+    expect(isAppPath("/fairshared", MOUNTED)).toBe(false);
   });
 });
 

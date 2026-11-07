@@ -7,6 +7,12 @@ export function appPath(pathname: string, baseURI: string): string {
   return inside.replace(/\/$/, "") || "/";
 }
 
+// Under a host site, its other pages share the origin but aren't the app's to route.
+export function isAppPath(pathname: string, baseURI: string): boolean {
+  const base = new URL(baseURI).pathname.replace(/\/$/, "");
+  return base === "" || pathname === base || pathname.startsWith(`${base}/`);
+}
+
 export function tripIdFromLink(input: string): string | null {
   try {
     const match = /\/t\/([a-f0-9]{32})\/?$/i.exec(new URL(input).pathname);
