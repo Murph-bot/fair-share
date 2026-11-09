@@ -198,7 +198,7 @@ Architecture and Capabilities of a Multi-Client Expense Splitter</h1>
       <tr><td><span class="tt">web/</span></td><td>Vite + TypeScript PWA (euro UI, trip links, Moments)</td></tr>
       <tr><td><span class="tt">pages/</span></td><td>HTTP API (Pages Functions + _worker.ts): trips, photos, signed originals, expiry</td></tr>
       <tr><td><span class="tt">mobile/</span></td><td>Expo SDK 57 client (same HTTP API; EAS for store builds)</td></tr>
-      <tr><td><span class="tt">wrangler.jsonc</span> / <span class="tt">db/schema.sql</span> / <span class="tt">cron-worker/</span></td><td>Pages bindings (D1, R2, KV), D1 schema, daily photo-expiry Worker</td></tr>
+      <tr><td><span class="tt">wrangler.jsonc</span> / <span class="tt">db/schema.sql</span></td><td>Pages bindings (D1, R2, KV) and D1 schema</td></tr>
     </tbody>
   </table>
 </div>
@@ -329,7 +329,7 @@ Architecture and Capabilities of a Multi-Client Expense Splitter</h1>
 <p>Photo session tokens are stored with Expo SecureStore (an injectable store is used in tests). The root layout waits until that store is ready before rendering the stack, so a cold start does not race a missing token. Relative photo URLs from the API are prefixed with the API base. The Support button appears only when <span class="tt">EXPO_PUBLIC_DONATE_URL</span> (or <span class="tt">expo.extra.donateUrl</span>) is a non-empty HTTPS URL.</p>
 
 <h2 class="sec" id="s6">6 &nbsp; Hosted service</h2>
-<p>Production is a Cloudflare Pages project. The build installs dependencies, bundles <span class="tt">pages/_worker.ts</span> into <span class="tt">web/dist</span>, and deploys with <span class="tt">wrangler pages deploy</span>. The worker serves the API, signed photo URLs, static assets, and the SPA fallback for <span class="tt">/t/*</span>. Trip payloads live in D1, photo binaries in R2, and PIN-attempt counters in KV. A separate cron Worker calls the protected expiry endpoint daily. Response headers include <span class="tt">X-Frame-Options: DENY</span>, <span class="tt">X-Content-Type-Options: nosniff</span>, and a strict-origin referrer policy. API routes send CORS headers including <span class="tt">Authorization</span>, so the Expo web preview can call the API; native <span class="tt">fetch</span> does not use CORS.</p>
+<p>Production is a Cloudflare Pages project. The build installs dependencies, bundles <span class="tt">pages/_worker.ts</span> into <span class="tt">web/dist</span>, and deploys with <span class="tt">wrangler pages deploy</span>. The worker serves the API, signed photo URLs, static assets, and the SPA fallback for <span class="tt">/t/*</span>. Trip payloads live in D1, photo binaries in R2, and PIN-attempt counters in KV. Protected photo expiry remains available at <span class="tt">POST /api/admin/expire-photos</span> (Bearer <span class="tt">CRON_SECRET</span>); the separate cron Worker was removed. Response headers include <span class="tt">X-Frame-Options: DENY</span>, <span class="tt">X-Content-Type-Options: nosniff</span>, and a strict-origin referrer policy. API routes send CORS headers including <span class="tt">Authorization</span>, so the Expo web preview can call the API; native <span class="tt">fetch</span> does not use CORS.</p>
 
 <div class="tabwrap">
   <div class="tabcaption"><b>Table 3.</b> HTTP surface (Pages Functions).</div>
@@ -349,7 +349,7 @@ Architecture and Capabilities of a Multi-Client Expense Splitter</h1>
   </table>
 </div>
 
-<p>A scheduled cron Worker expires photos older than 365 days and destroys any linked R2 original.</p>
+<p>The protected expiry endpoint deletes photos older than 365 days and any linked R2 original. No scheduled Worker currently invokes it.</p>
 <p>JSON bodies are capped at 200&nbsp;KiB. Display uploads are capped at 4&nbsp;MiB and 100 photos per trip; the client compresses to a longest edge of 1600 pixels. Originals are optional, JPEG-only, up to 10&nbsp;MiB, stored beside the display copy in R2. Signed original URLs last one hour. Display URLs for locked trips are HMAC-signed and last one hour. Photo session tokens last 30 days.</p>
 <p>Creating a trip requires <span class="tt">PHOTO_PIN_PEPPER</span> in the environment. Without an <span class="tt">original</span> part, upload stores the compressed JPEG and <span class="tt">originalUrl</span> remains empty.</p>
 

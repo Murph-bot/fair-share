@@ -105,7 +105,7 @@ You can also use `fairshare pull` / `fairshare push` with `--host` or `FAIRSHARE
 - Schema: `wrangler d1 execute fairshare-db --remote --file db/schema.sql` (and `--local` for dev).
 - Secrets: `npx wrangler pages secret put PHOTO_PIN_PEPPER` and `npx wrangler pages secret put CRON_SECRET` (local values go in `.dev.vars`).
 - Deploy: `npm run build:pages && npx wrangler pages deploy web/dist`.
-- Photo expiry cron: separate Worker in `cron-worker/` (`wrangler deploy` from that folder) calls `/api/admin/expire-photos` daily with `CRON_SECRET`.
+- Photo expiry: protected `POST /api/admin/expire-photos` (Bearer `CRON_SECRET`) remains on Pages; the separate `fair-share-cron` Worker was removed.
 
 Photos are stored in R2 (display copies + full-res originals, uploaded in one request), compressed on the device, and removed automatically after a year. Thumbnails are CSS-cropped originals — no paid image transforms. Originals are kept at full quality in R2.
 
