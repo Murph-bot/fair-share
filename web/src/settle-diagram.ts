@@ -37,11 +37,12 @@ export function settleDiagramSvg(
       const s = { x: a.x + ux * (R + 4), y: a.y + uy * (R + 4) };
       const e = { x: b.x - ux * (R + 8), y: b.y - uy * (R + 8) };
       const c = { x: (s.x + e.x) / 2 - uy * d * 0.22, y: (s.y + e.y) / 2 + ux * d * 0.22 };
-      const mid = { x: 0.25 * s.x + 0.5 * c.x + 0.25 * e.x, y: 0.25 * s.y + 0.5 * c.y + 0.25 * e.y };
+      // Label sits outside the curve's bulge so it never covers its own arrow.
+      const mid = { x: 0.25 * s.x + 0.5 * c.x + 0.25 * e.x - uy * 16, y: 0.25 * s.y + 0.5 * c.y + 0.25 * e.y + ux * 16 };
       const f = (n: number) => n.toFixed(1);
       return (
         `<path class="flow" d="M${f(s.x)} ${f(s.y)} Q${f(c.x)} ${f(c.y)} ${f(e.x)} ${f(e.y)}" marker-end="url(#fs-arrow)"/>` +
-        `<text class="flow-amt" x="${f(mid.x)}" y="${f(mid.y - 6)}" text-anchor="middle">${escapeHtml(money(p.amount_cents))}</text>`
+        `<text class="flow-amt" x="${f(mid.x)}" y="${f(mid.y + 4)}" text-anchor="middle">${escapeHtml(money(p.amount_cents))}</text>`
       );
     })
     .join("");
