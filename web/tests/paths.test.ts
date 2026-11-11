@@ -1,10 +1,17 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { appPath, isAppPath, tripIdFromLink } from "../src/paths";
+import { appPath, isAppPath, tripIdFromLink, tripLinkExample } from "../src/paths";
 
 const ROOT = "https://fair-share-trips.pages.dev/";
 const MOUNTED = "https://pithelo.com/fairshare/";
 const ID = "ff4765be974564a2503e8f94f67538dd";
+
+describe("tripLinkExample", () => {
+  it("shows a trip link on the site the app is served from", () => {
+    expect(tripLinkExample(ROOT)).toBe("https://fair-share-trips.pages.dev/t/…");
+    expect(tripLinkExample(MOUNTED)).toBe("https://pithelo.com/fairshare/t/…");
+  });
+});
 
 describe("appPath", () => {
   it("is the pathname itself when the app is at the root", () => {
