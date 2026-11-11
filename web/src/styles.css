@@ -379,3 +379,36 @@ fieldset { border: 0; }
   .print-only { display: block !important; border: none; padding: 0; }
   .print-only .ledger { break-inside: avoid; }
 }
+
+/* Settle-up map: arrows between friends' initials, and coins when the trip is all square. */
+.settle-map { display: block; width: 100%; max-width: 420px; height: auto; margin: 4px auto 12px; overflow: visible; }
+.settle-map .flow { fill: none; stroke: var(--owes); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 6 6; }
+.settle-map marker path { fill: var(--owes); }
+.settle-map .flow-amt { fill: var(--ink); font: 700 13px/1 inherit; paint-order: stroke; stroke: var(--alt); stroke-width: 4px; }
+.settle-map .node circle { stroke: var(--fruit-ink); stroke-width: 2; }
+.settle-map .node text { fill: var(--fruit-ink); font: 800 14px/1 inherit; pointer-events: none; }
+.settle-map .fruit-mango { fill: var(--mango); }
+.settle-map .fruit-lagoon { fill: var(--lagoon); }
+.settle-map .fruit-watermelon { fill: var(--watermelon); }
+.settle-map .fruit-grape { fill: var(--grape-fill); }
+.settle-map .fruit-kiwi { fill: var(--kiwi); }
+.settle-map .fruit-cobalt { fill: var(--cobalt-fill); }
+.settle-map .fruit-peach { fill: var(--peach); }
+.settle-map .fruit-grape + text, .settle-map .fruit-cobalt + text { fill: #fff; }
+.result-card { position: relative; }
+.coin {
+  position: absolute; top: 8px; width: 22px; height: 22px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe9a8, #e0a800); border: 2px solid #8a6400;
+  animation: coin-drop 1.1s cubic-bezier(.5, 0, .7, 1) both; pointer-events: none;
+}
+@keyframes coin-drop {
+  0% { transform: translateY(0); opacity: 1; }
+  65% { transform: translateY(150px); }
+  78% { transform: translateY(136px); }
+  90% { transform: translateY(150px); opacity: 1; }
+  100% { transform: translateY(150px); opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .settle-map .flow { animation: flow-dash 1s linear infinite; }
+  @keyframes flow-dash { to { stroke-dashoffset: -12; } }
+}
