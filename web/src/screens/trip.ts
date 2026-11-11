@@ -31,6 +31,7 @@ import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
 import { bindMoments, momentsSection } from "./moments";
 import { buildResult, formatMoney, initials, settleSentence, type Lang } from "../result";
+import { settleDiagramSvg } from "../settle-diagram";
 import { getLanguage } from "../i18n";
 
 let saveLock = false;
@@ -277,6 +278,25 @@ function statsBlock(trip: Trip): string {
   `;
 }
 
+function openPayments(trip: Trip): number {
+  return settle(computeBalances(trip)).filter((p) => !paymentStatus(trip, p).completed).length;
+}
+
+/** A few coins fall into the result card when the last payment is marked paid. */
+function coinDrop(root: HTMLElement): void {
+  const card = root.querySelector<HTMLElement>("#result-card");
+  if (!card || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (let i = 0; i < 6; i++) {
+    const coin = document.createElement("span");
+    coin.className = "coin";
+    coin.setAttribute("aria-hidden", "true");
+    coin.style.left = `${38 + i * 4}%`;
+    coin.style.animationDelay = `${i * 0.09}s`;
+    card.append(coin);
+    coin.addEventListener("animationend", () => coin.remove());
+  }
+}
+
 function settleBlock(trip: Trip): string {
   if (trip.expenses.length === 0) {
     return `<p class="muted">${t("Add expenses to see who pays whom.")}</p>`;
@@ -286,7 +306,10 @@ function settleBlock(trip: Trip): string {
     return `<p class="muted">${t("All settled — no payments needed.")}</p>`;
   }
   const currency = trip.currency ?? "EUR";
-  return `<ul class="payments">${payments
+  const people = buildResult(trip, lang()).people;
+  const open = payments.filter((p) => !paymentStatus(trip, p).completed);
+  const diagram = settleDiagramSvg(people, open, (c) => centsToCurrency(c, currency), t("Who pays whom"));
+  return `${diagram}<ul class="payments">${payments
     .map((p) => {
       const status = paymentStatus(trip, p);
       const amountLabel = centsToCurrency(p.amount_cents, currency);
@@ -622,6 +645,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         const next = recordPayment(trip, { frm: from, to, amount_cents: amountCents });
         const saved = await persist(id, next, banner);
         paint(root, id, saved, editingId);
+        if (openPayments(trip) > 0 && openPayments(saved) === 0) coinDrop(root);
       } catch (err) {
         if (!saveLock) {
           setBusy(root, false);
