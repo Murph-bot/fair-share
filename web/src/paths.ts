@@ -13,6 +13,11 @@ export function isAppPath(pathname: string, baseURI: string): boolean {
   return base === "" || pathname === base || pathname.startsWith(`${base}/`);
 }
 
+// Example trip link for the site the app is served from, so pithelo.com shows pithelo.com.
+export function tripLinkExample(baseURI: string): string {
+  return `${new URL("t/", baseURI).href}…`;
+}
+
 export function tripIdFromLink(input: string): string | null {
   try {
     const match = /\/t\/([a-f0-9]{32})\/?$/i.exec(new URL(input).pathname);
