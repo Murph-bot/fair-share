@@ -15,4 +15,4 @@ export type PhotoRecord = {
   originalUrl: string | null;
 };
 
-export type PublicTrip = Trip & { photos_locked?: boolean };
+export type PublicTrip = Trip & { photos_locked?: boolean; revision?: number };

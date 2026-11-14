@@ -24,10 +24,13 @@ import {
   deleteTripRow,
   getPhoto,
   getTripRaw,
+  getTripRecord,
+  insertTrip,
   listPhotos,
   putPhoto,
   recordPinFailure,
-  setTripRaw,
+  replaceTripAtRevision,
+  setTripPinHash,
 } from "../_shared/stores";
 import { expireDuePhotos } from "../_shared/expiry";
 import {
@@ -90,24 +93,43 @@ function formString(form: FormData, key: string): string | undefined {
   return trimmed || undefined;
 }
 
+// Clients from before revisions send none. They may only save a trip nobody has
+// saved since revisions began, so they can never overwrite a newer copy.
+function expectedRevision(body: unknown): number {
+  const revision = (body as { revision?: unknown }).revision;
+  if (revision === undefined) {
+    return 0;
+  }
+  if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 0) {
+    throw new ValidationError("revision must be a non-negative integer");
+  }
+  return revision;
+}
+
 async function handleTripRoutes(req: Request, env: Env, tripId: string): Promise<Response> {
   if (req.method === "GET") {
-    const raw = await getTripRaw(env, tripId);
-    if (raw === null) {
+    const record = await getTripRecord(env, tripId);
+    if (record === null) {
       return json(404, { error: "Trip not found" });
     }
-    return json(200, publicTrip(parseTrip(raw), Boolean(pinHashFromRecord(raw))));
+    return json(200, publicTrip(parseTrip(record.raw), Boolean(pinHashFromRecord(record.raw)), record.revision));
   }
 
   if (req.method === "PUT") {
-    const existing = await getTripRaw(env, tripId);
-    if (existing === null) {
+    const body = await readJsonBody(req);
+    const trip: Trip = parseTrip(body);
+    const saved = await replaceTripAtRevision(env, tripId, trip, expectedRevision(body));
+    if (saved) {
+      return json(200, publicTrip(trip, saved.photosLocked, saved.revision));
+    }
+    const latest = await getTripRecord(env, tripId);
+    if (latest === null) {
       return json(404, { error: "Trip not found" });
     }
-    const trip: Trip = parseTrip(await readJsonBody(req));
-    const pinHash = pinHashFromRecord(existing);
-    await setTripRaw(env, tripId, pinHash ? { ...trip, pin_hash: pinHash } : trip);
-    return json(200, publicTrip(trip, Boolean(pinHash)));
+    return json(409, {
+      error: "This trip was changed by someone else",
+      trip: publicTrip(parseTrip(latest.raw), Boolean(pinHashFromRecord(latest.raw)), latest.revision),
+    });
   }
 
   if (req.method === "DELETE") {
@@ -203,15 +225,12 @@ async function handleSetPin(req: Request, env: Env, tripId: string, ip: string):
 
   const pepper = pinPepper(env);
   const pinHash = await hashPin(pin, tripId, pepper);
-  const latest = await getTripRaw(env, tripId);
-  if (latest === null) {
-    return json(404, { error: "Trip not found" });
-  }
-  if (pinHashFromRecord(latest)) {
+  if (!(await setTripPinHash(env, tripId, pinHash))) {
+    if ((await getTripRaw(env, tripId)) === null) {
+      return json(404, { error: "Trip not found" });
+    }
     throw new ValidationError("Trip already has a PIN");
   }
-  const trip = parseTrip(latest);
-  await setTripRaw(env, tripId, { ...trip, pin_hash: pinHash });
   await clearPinFailures(env, tripId, ip);
   const photosToken = await createSessionToken(tripId, pepper);
   return json(200, { pin, photos_token: photosToken });
@@ -356,9 +375,9 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
       const pepper = pinPepper(env);
       const pin = generatePin();
       const pinHash = await hashPin(pin, tripId, pepper);
-      await setTripRaw(env, tripId, { ...trip, pin_hash: pinHash });
+      await insertTrip(env, tripId, { ...trip, pin_hash: pinHash });
       const photosToken = await createSessionToken(tripId, pepper);
-      return json(201, { id: tripId, trip: publicTrip(trip, true), pin, photos_token: photosToken });
+      return json(201, { id: tripId, trip: publicTrip(trip, true, 0), pin, photos_token: photosToken });
     }
 
     const tripMatch = /^\/api\/trips\/([a-f0-9]{32})(\/.*)?$/.exec(path);

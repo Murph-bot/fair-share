@@ -2,13 +2,27 @@ import { createExampleTrip, createTripFromTemplate, parseTrip, type Trip } from 
 import type { PhotoRecord } from "@fairshare/domain/photos";
 import { loadPhotoToken } from "./photo-session";
 
-export type PublicTrip = Trip & { photos_locked?: boolean };
+export type PublicTrip = Trip & { photos_locked?: boolean; revision: number };
+
+/** The trip on the server is newer than the copy this save was made from. */
+export class TripConflictError extends Error {
+  constructor(readonly latest: PublicTrip) {
+    super("This trip was changed by someone else. Reload to see the latest version, then try again.");
+    this.name = "TripConflictError";
+  }
+}
 
 function asPublicTrip(raw: unknown): PublicTrip {
   const trip = parseTrip(raw);
-  const photosLocked =
-    typeof raw === "object" && raw !== null && (raw as { photos_locked?: unknown }).photos_locked === true;
-  return { ...trip, photos_locked: photosLocked };
+  const extras = (typeof raw === "object" && raw !== null ? raw : {}) as {
+    photos_locked?: unknown;
+    revision?: unknown;
+  };
+  return {
+    ...trip,
+    photos_locked: extras.photos_locked === true,
+    revision: typeof extras.revision === "number" ? extras.revision : 0,
+  };
 }
 
 async function readError(res: Response): Promise<string> {
@@ -73,7 +87,7 @@ export async function createRemoteDemoTrip(name: string): Promise<{
 }> {
   const created = await createRemoteTrip(name);
   const trip = createExampleTrip(name);
-  const saved = await saveTrip(created.id, trip);
+  const saved = await saveTrip(created.id, trip, created.trip.revision);
   return {
     id: created.id,
     trip: saved,
@@ -88,7 +102,7 @@ export async function createRemoteTemplateTrip(
 ): Promise<{ id: string; trip: PublicTrip; pin: string; photos_token: string }> {
   const trip = createTripFromTemplate(templateId, name);
   const created = await createRemoteTrip(trip.name);
-  const saved = await saveTrip(created.id, trip);
+  const saved = await saveTrip(created.id, trip, created.trip.revision);
   return {
     id: created.id,
     trip: saved,
@@ -106,7 +120,7 @@ export async function deleteRemoteTrip(id: string): Promise<void> {
   }
 }
 
-export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip> {
+export async function saveTrip(id: string, trip: Trip, revision: number): Promise<PublicTrip> {
   const res = await fetch(`api/trips/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -132,12 +146,43 @@ export async function saveTrip(id: string, trip: PublicTrip): Promise<PublicTrip
         ...(expense.tip_cents === undefined ? {} : { tip_cents: expense.tip_cents }),
       })),
       completedPayments: trip.completedPayments,
+      revision,
     }),
   });
+  if (res.status === 409) {
+    const body = (await res.json()) as { trip?: unknown };
+    throw new TripConflictError(asPublicTrip(body.trip));
+  }
   if (!res.ok) {
     throw new Error(await readError(res));
   }
   return asPublicTrip(await res.json());
+}
+
+/**
+ * Saves one edit. If someone else saved first, the edit is applied again on
+ * their copy, so neither change is lost. An edit that no longer applies (its
+ * expense or person is gone) fails with TripConflictError.
+ */
+export async function saveEdit(
+  id: string,
+  base: PublicTrip,
+  edit: (trip: Trip) => Trip,
+): Promise<{ trip: PublicTrip; rebased: boolean }> {
+  try {
+    return { trip: await saveTrip(id, edit(base), base.revision), rebased: false };
+  } catch (conflict) {
+    if (!(conflict instanceof TripConflictError)) {
+      throw conflict;
+    }
+    let rebased: Trip;
+    try {
+      rebased = edit(conflict.latest);
+    } catch {
+      throw conflict;
+    }
+    return { trip: await saveTrip(id, rebased, conflict.latest.revision), rebased: true };
+  }
 }
 
 export async function unlockPhotos(tripId: string, pin: string): Promise<string> {

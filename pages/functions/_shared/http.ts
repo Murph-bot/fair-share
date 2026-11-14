@@ -79,8 +79,12 @@ export function pinHashFromRecord(raw: unknown): string | undefined {
   return hash;
 }
 
-export function publicTrip(trip: Trip, photosLocked: boolean): Trip & { photos_locked: boolean } {
-  return { ...trip, photos_locked: photosLocked };
+export function publicTrip(
+  trip: Trip,
+  photosLocked: boolean,
+  revision: number,
+): Trip & { photos_locked: boolean; revision: number } {
+  return { ...trip, photos_locked: photosLocked, revision };
 }
 
 export function bearerToken(req: Request): string | undefined {
