@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addExpense, addPerson, createTrip, type Trip } from "../src/domain";
-import { createRemoteTrip, fetchTrip, saveTrip } from "../src/api/tripApi";
+import { createRemoteTrip, fetchTrip, saveTrip, TripConflictError } from "../src/api/tripApi";
 
 const tripId = "ff4765be974564a2503e8f94f67538dd";
 
@@ -116,6 +116,19 @@ describe("tripApi", () => {
       ],
       completedPayments: [],
     });
+  });
+
+  it("sends the loaded revision and surfaces a 409 with the newer trip", async () => {
+    const latest = { ...createTrip("Theirs"), photos_locked: false, revision: 8 };
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(mockJsonResponse({ error: "changed", trip: latest }, { status: 409 }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const error = await saveTrip(tripId, createTrip("Mine"), 7).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(TripConflictError);
+    expect((error as TripConflictError).latest.revision).toBe(8);
+    expect(JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body)).revision).toBe(7);
   });
 
   it("preserves photos_locked on fetch", async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchTrip, saveTrip } from "../api/tripApi";
+import { fetchTrip, saveTrip, TripConflictError } from "../api/tripApi";
 import { enqueue, flushQueue, hasQueued } from "../api/mutationQueue";
 import { isOnline } from "../api/networkStatus";
 import { saveRecentTrip } from "../api/recentTrips";
@@ -19,6 +19,9 @@ export type UseTripResult = {
   mutate: (transform: (trip: Trip) => Trip) => Promise<boolean>;
   flush: () => Promise<void>;
 };
+
+const OFFLINE_CONFLICT_MESSAGE =
+  "This trip was changed by someone else while you were offline. Your offline changes were not saved.";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong";
@@ -74,12 +77,15 @@ export function useTrip(tripId: string | null): UseTripResult {
     setLoading(true);
     setError(null);
     try {
-      await flushQueue();
+      const conflicts = await flushQueue();
       setQueued(await hasQueued(tripId));
       const nextTrip = await fetchTrip(tripId);
       tripRef.current = nextTrip;
       setTrip(nextTrip);
       setOffline(false);
+      if (conflicts.includes(tripId)) {
+        setError(OFFLINE_CONFLICT_MESSAGE);
+      }
       void saveSnapshot(tripId, nextTrip);
       void saveRecentTrip(tripId, nextTrip.name);
     } catch (caught) {
@@ -122,38 +128,48 @@ export function useTrip(tripId: string | null): UseTripResult {
       savingRef.current = true;
       setError(null);
       setQueued(false);
+      const keepOffline = async (nextTrip: Trip): Promise<void> => {
+        const local: PublicTrip = {
+          ...nextTrip,
+          photos_locked: current.photos_locked,
+          revision: current.revision,
+        };
+        await enqueue(tripId, nextTrip, current.revision);
+        tripRef.current = local;
+        setTrip(local);
+        setQueued(true);
+        setOffline(true);
+        void saveSnapshot(tripId, local);
+      };
       try {
         const nextTrip = transform(current);
         const online = await isOnline();
         if (!online) {
-          await enqueue(tripId, nextTrip);
-          tripRef.current = nextTrip as PublicTrip;
-          setTrip(nextTrip as PublicTrip);
-          setQueued(true);
-          setOffline(true);
-          void saveSnapshot(tripId, nextTrip as PublicTrip);
+          await keepOffline(nextTrip);
           return true;
         }
         try {
-          const savedTrip = await saveTrip(tripId, nextTrip);
+          const savedTrip = await saveTrip(tripId, nextTrip, current.revision);
           tripRef.current = savedTrip;
           setTrip(savedTrip);
           setOffline(false);
           void saveSnapshot(tripId, savedTrip);
           return true;
         } catch (caught) {
+          if (caught instanceof TripConflictError) {
+            // Show the newer copy. The user redoes the edit on top of it.
+            tripRef.current = caught.latest;
+            setTrip(caught.latest);
+            void saveSnapshot(tripId, caught.latest);
+            throw caught;
+          }
           // A failed request (e.g. connectivity dropped between the online
           // check and the call) queues the edit like an offline mutation.
           // Server rejections (4xx/5xx) surface as errors instead.
           if (!(caught instanceof TypeError)) {
             throw caught;
           }
-          await enqueue(tripId, nextTrip);
-          tripRef.current = nextTrip as PublicTrip;
-          setTrip(nextTrip as PublicTrip);
-          setQueued(true);
-          setOffline(true);
-          void saveSnapshot(tripId, nextTrip as PublicTrip);
+          await keepOffline(nextTrip);
           return true;
         }
       } catch (caught) {
@@ -170,9 +186,12 @@ export function useTrip(tripId: string | null): UseTripResult {
   const flush = useCallback(async () => {
     try {
       setSaving(true);
-      await flushQueue();
+      const conflicts = await flushQueue();
       setQueued(await hasQueued(tripId ?? ""));
       await reload();
+      if (tripId && conflicts.includes(tripId)) {
+        setError(OFFLINE_CONFLICT_MESSAGE);
+      }
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
