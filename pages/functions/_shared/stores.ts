@@ -1,8 +1,4 @@
-import { RateLimitError } from "../../../packages/domain/src/errors";
 import type { Env, R2Metadata } from "./env";
-
-const PIN_ATTEMPT_LIMIT = 8;
-const PIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
 
 // ---------------------------------------------------------------- trips (D1)
 
@@ -172,36 +168,4 @@ export async function listAllPhotoKeys(
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
   return keys;
-}
-
-// ----------------------------------------------------- PIN attempts (KV, TTL)
-
-function attemptKey(tripId: string, ip: string): string {
-  return `pin:attempts:${tripId}:${ip.replaceAll(":", "_").slice(0, 80)}`;
-}
-
-type AttemptState = { count: number; resetAt: number };
-
-export async function assertPinAllowed(env: Env, tripId: string, ip: string): Promise<void> {
-  const raw = (await env.PIN_ATTEMPTS.get(attemptKey(tripId, ip), "json")) as AttemptState | null;
-  const now = Date.now();
-  if (raw && raw.resetAt > now && raw.count >= PIN_ATTEMPT_LIMIT) {
-    throw new RateLimitError("Too many PIN attempts. Try again later.");
-  }
-}
-
-export async function recordPinFailure(env: Env, tripId: string, ip: string): Promise<void> {
-  const key = attemptKey(tripId, ip);
-  const raw = (await env.PIN_ATTEMPTS.get(key, "json")) as AttemptState | null;
-  const now = Date.now();
-  const active = raw && raw.resetAt > now;
-  const resetAt = active ? raw.resetAt : now + PIN_ATTEMPT_WINDOW_SECONDS * 1000;
-  const count = active ? raw.count + 1 : 1;
-  await env.PIN_ATTEMPTS.put(key, JSON.stringify({ count, resetAt }), {
-    expirationTtl: PIN_ATTEMPT_WINDOW_SECONDS,
-  });
-}
-
-export async function clearPinFailures(env: Env, tripId: string, ip: string): Promise<void> {
-  await env.PIN_ATTEMPTS.delete(attemptKey(tripId, ip));
 }

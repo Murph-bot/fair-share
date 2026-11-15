@@ -4,10 +4,13 @@ import type { Env } from "./env";
 export const TRIP_CREATES_PER_HOUR = 10;
 export const TRIP_CREATES_PER_DAY = 30;
 export const PHOTO_UPLOADS_PER_WINDOW = 60;
+export const PIN_ATTEMPTS_PER_TRIP = 30;
+export const PIN_ATTEMPTS_PER_CLIENT = 8;
 
 const HOUR_SECONDS = 60 * 60;
 const DAY_SECONDS = 24 * HOUR_SECONDS;
 const PHOTO_UPLOAD_WINDOW_SECONDS = 10 * 60;
+const PIN_CLIENT_WINDOW_SECONDS = 15 * 60;
 
 // One statement, so concurrent requests each get a distinct count.
 const HIT_SQL = `INSERT INTO rate_limits (key, count, expires_at) VALUES (?1, 1, ?2)
@@ -72,4 +75,13 @@ export async function limitPhotoUpload(env: Env, client: string): Promise<void> 
     PHOTO_UPLOADS_PER_WINDOW,
     "Too many photos uploaded. Try again in a few minutes.",
   );
+}
+
+// Every guess is counted before the PIN is checked, right or wrong, and nothing
+// refunds it: a correct PIN from one client must not reset what an attacker has spent.
+// The client counter runs first so one noisy client does not use up the trip's attempts.
+export async function limitPinAttempt(env: Env, tripId: string, client: string): Promise<void> {
+  const message = "Too many PIN attempts. Try again later.";
+  await enforce(env, "pin-client", `${tripId}:${client}`, PIN_CLIENT_WINDOW_SECONDS, PIN_ATTEMPTS_PER_CLIENT, message);
+  await enforce(env, "pin-trip", tripId, HOUR_SECONDS, PIN_ATTEMPTS_PER_TRIP, message);
 }

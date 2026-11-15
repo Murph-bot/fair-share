@@ -17,8 +17,6 @@ import {
 } from "../../../packages/domain/src/photos";
 import { createTrip, newTripId, parseTrip, type Trip } from "../../../packages/domain/src/trip";
 import {
-  assertPinAllowed,
-  clearPinFailures,
   countPhotos,
   deletePhotoObject,
   deleteTripRow,
@@ -28,15 +26,13 @@ import {
   insertTrip,
   listPhotos,
   putPhoto,
-  recordPinFailure,
   replaceTripAtRevision,
   setTripPinHash,
 } from "../_shared/stores";
 import { expireDuePhotos } from "../_shared/expiry";
-import { limitPhotoUpload, limitTripCreation } from "../_shared/rateLimit";
+import { limitPhotoUpload, limitPinAttempt, limitTripCreation } from "../_shared/rateLimit";
 import {
   bearerToken,
-  clientIp,
   clientKey,
   corsPreflight,
   errorResponse,
@@ -150,7 +146,7 @@ async function handleTripRoutes(req: Request, env: Env, tripId: string): Promise
   return json(405, { error: "Method not allowed" });
 }
 
-async function handleSession(req: Request, env: Env, tripId: string, ip: string): Promise<Response> {
+async function handleSession(req: Request, env: Env, tripId: string, client: string): Promise<Response> {
   const raw = await getTripRaw(env, tripId);
   if (raw === null) {
     return json(404, { error: "Trip not found" });
@@ -169,13 +165,11 @@ async function handleSession(req: Request, env: Env, tripId: string, ip: string)
     throw new ValidationError("PIN must be 6 digits");
   }
 
-  await assertPinAllowed(env, tripId, ip);
+  await limitPinAttempt(env, tripId, client);
   const pepper = pinPepper(env);
   if (!(await pinMatches(pin, tripId, pepper, pinHash))) {
-    await recordPinFailure(env, tripId, ip);
     return json(401, { error: "Wrong PIN" });
   }
-  await clearPinFailures(env, tripId, ip);
   const token = await createSessionToken(tripId, pepper);
   return json(200, { token });
 }
@@ -183,7 +177,7 @@ async function handleSession(req: Request, env: Env, tripId: string, ip: string)
 // Anyone with the trip link may set a PIN once on a grandfathered trip that has no pin_hash.
 // This matches the open trust model of the app (same as editing expenses).
 // If a PIN has already been set, further attempts are rejected with 400 (no PIN rotation in v3).
-async function handleSetPin(req: Request, env: Env, tripId: string, ip: string): Promise<Response> {
+async function handleSetPin(req: Request, env: Env, tripId: string): Promise<Response> {
   const raw = await getTripRaw(env, tripId);
   if (raw === null) {
     return json(404, { error: "Trip not found" });
@@ -193,8 +187,6 @@ async function handleSetPin(req: Request, env: Env, tripId: string, ip: string):
   if (existingPinHash) {
     throw new ValidationError("Trip already has a PIN");
   }
-
-  await assertPinAllowed(env, tripId, ip);
 
   let pin: string | null = null;
   const rawText = await req.text();
@@ -233,7 +225,6 @@ async function handleSetPin(req: Request, env: Env, tripId: string, ip: string):
     }
     throw new ValidationError("Trip already has a PIN");
   }
-  await clearPinFailures(env, tripId, ip);
   const photosToken = await createSessionToken(tripId, pepper);
   return json(200, { pin, photos_token: photosToken });
 }
@@ -398,13 +389,13 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
       if (req.method !== "POST") {
         return json(405, { error: "Method not allowed" });
       }
-      return await handleSession(req, env, tripId, clientIp(req));
+      return await handleSession(req, env, tripId, clientKey(req));
     }
     if (rest === "/pin") {
       if (req.method !== "POST") {
         return json(405, { error: "Method not allowed" });
       }
-      return await handleSetPin(req, env, tripId, clientIp(req));
+      return await handleSetPin(req, env, tripId);
     }
     const photosMatch = /^\/photos(?:\/([a-f0-9]{32}))?$/.exec(rest);
     if (photosMatch) {

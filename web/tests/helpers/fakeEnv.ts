@@ -1,7 +1,6 @@
 import type {
   D1Like,
   Env,
-  KVLike,
   R2BucketLike,
   R2Metadata,
 } from "../../../pages/functions/_shared/env";
@@ -15,13 +14,11 @@ export function makeFakeEnv(): {
   trips: Map<string, unknown>;
   revisions: Map<string, number>;
   photos: Map<string, FakePhoto>;
-  pinAttempts: Map<string, unknown>;
   counters: Map<string, { count: number; expiresAt: number }>;
 } {
   const trips = new Map<string, unknown>();
   const revisions = new Map<string, number>();
   const photos = new Map<string, FakePhoto>();
-  const pinAttempts = new Map<string, unknown>();
   const counters = new Map<string, { count: number; expiresAt: number }>();
 
   const storedPinHash = (id: string): unknown =>
@@ -156,36 +153,15 @@ export function makeFakeEnv(): {
     },
   };
 
-  const kv: KVLike = {
-    async get(key, type) {
-      const value = pinAttempts.get(key);
-      if (value === undefined) {
-        return null;
-      }
-      if (type === "json" && typeof value === "string") {
-        return JSON.parse(value) as unknown;
-      }
-      return value;
-    },
-    async put(key, value) {
-      pinAttempts.set(key, value);
-    },
-    async delete(key) {
-      pinAttempts.delete(key);
-    },
-  };
-
   return {
     env: {
       FAIRSHARE_DB: d1,
       FAIRSHARE_PHOTOS: r2,
-      PIN_ATTEMPTS: kv,
       PHOTO_PIN_PEPPER: TEST_PEPPER,
     },
     trips,
     revisions,
     photos,
-    pinAttempts,
     counters,
   };
 }
