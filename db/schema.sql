@@ -12,3 +12,12 @@ CREATE TABLE IF NOT EXISTS trips (
   -- Bumped on every save. A save must name the revision it was made from.
   revision INTEGER NOT NULL DEFAULT 0
 );
+
+-- Fixed-window counters for rate limits (migration 0002). Rows are pruned once
+-- expires_at (unix seconds) has passed.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_limits_expires_at ON rate_limits (expires_at);

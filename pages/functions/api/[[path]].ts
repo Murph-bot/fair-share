@@ -33,9 +33,11 @@ import {
   setTripPinHash,
 } from "../_shared/stores";
 import { expireDuePhotos } from "../_shared/expiry";
+import { limitPhotoUpload, limitTripCreation } from "../_shared/rateLimit";
 import {
   bearerToken,
   clientIp,
+  clientKey,
   corsPreflight,
   errorResponse,
   json,
@@ -285,6 +287,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
     if (denied) {
       return denied;
     }
+    await limitPhotoUpload(env, clientKey(req));
     if ((await countPhotos(env, tripId)) >= MAX_PHOTOS_PER_TRIP) {
       throw new ValidationError(`A trip can hold at most ${MAX_PHOTOS_PER_TRIP} photos`);
     }
@@ -362,6 +365,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
     }
 
     if (path === "/api/trips" && req.method === "POST") {
+      await limitTripCreation(env, clientKey(req));
       const payload = await readJsonBody(req);
       if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
         throw new ValidationError("Body must be an object");

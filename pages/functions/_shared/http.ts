@@ -99,3 +99,29 @@ export function bearerToken(req: Request): string | undefined {
 export function clientIp(req: Request): string {
   return req.headers.get("CF-Connecting-IP") ?? "unknown";
 }
+
+const IPV4_MAPPED = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/;
+
+// Rate limits key on the /64, since one household or host controls a whole /64.
+export function clientKey(req: Request): string {
+  const ip = clientIp(req).toLowerCase();
+  const mapped = IPV4_MAPPED.exec(ip);
+  if (mapped) {
+    return mapped[1];
+  }
+  if (!ip.includes(":")) {
+    return ip.slice(0, 80);
+  }
+  const [head, tail, extra] = ip.split("::");
+  if (extra !== undefined) {
+    return ip.slice(0, 80);
+  }
+  const front = head ? head.split(":") : [];
+  const back = tail ? tail.split(":") : [];
+  const fill = tail === undefined ? 0 : 8 - front.length - back.length;
+  const groups = [...front, ...Array<string>(Math.max(fill, 0)).fill("0"), ...back];
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) {
+    return ip.slice(0, 80);
+  }
+  return `${groups.slice(0, 4).map((g) => g.padStart(4, "0")).join(":")}::/64`;
+}
