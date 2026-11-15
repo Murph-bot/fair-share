@@ -8,5 +8,7 @@
 CREATE TABLE IF NOT EXISTS trips (
   id TEXT PRIMARY KEY,
   payload TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  -- Bumped on every save. A save must name the revision it was made from.
+  revision INTEGER NOT NULL DEFAULT 0
 );

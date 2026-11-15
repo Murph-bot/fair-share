@@ -6,7 +6,7 @@
 export interface D1Prepared {
   bind(...values: unknown[]): {
     first<T = unknown>(): Promise<T | null>;
-    run(): Promise<{ meta: unknown }>;
+    run(): Promise<{ meta: { changes?: number } }>;
     all<T = unknown>(): Promise<{ results: T[] }>;
   };
 }

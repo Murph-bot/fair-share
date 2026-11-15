@@ -6,27 +6,67 @@ const PIN_ATTEMPT_WINDOW_SECONDS = 15 * 60;
 
 // ---------------------------------------------------------------- trips (D1)
 
-export async function getTripRaw(env: Env, tripId: string): Promise<unknown | null> {
-  const row = await env.FAIRSHARE_DB.prepare("SELECT payload FROM trips WHERE id = ?")
+export type TripRecord = { raw: unknown; revision: number };
+
+export async function getTripRecord(env: Env, tripId: string): Promise<TripRecord | null> {
+  const row = await env.FAIRSHARE_DB.prepare("SELECT payload, revision FROM trips WHERE id = ?")
     .bind(tripId)
-    .first<{ payload: string }>();
+    .first<{ payload: string; revision: number }>();
   if (!row) {
     return null;
   }
   try {
-    return JSON.parse(row.payload) as unknown;
+    return { raw: JSON.parse(row.payload) as unknown, revision: row.revision };
   } catch {
     return null;
   }
 }
 
-export async function setTripRaw(env: Env, tripId: string, raw: unknown): Promise<void> {
-  await env.FAIRSHARE_DB.prepare(
-    `INSERT INTO trips (id, payload, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at`,
-  )
+export async function getTripRaw(env: Env, tripId: string): Promise<unknown | null> {
+  return (await getTripRecord(env, tripId))?.raw ?? null;
+}
+
+export async function insertTrip(env: Env, tripId: string, raw: unknown): Promise<void> {
+  await env.FAIRSHARE_DB.prepare("INSERT INTO trips (id, payload, updated_at) VALUES (?, ?, ?)")
     .bind(tripId, JSON.stringify(raw), new Date().toISOString())
     .run();
+}
+
+export type TripSaveResult = { revision: number; photosLocked: boolean };
+
+// One statement, so two saves from the same revision cannot both win, and a
+// PIN set between the caller's read and this write is kept.
+export async function replaceTripAtRevision(
+  env: Env,
+  tripId: string,
+  trip: unknown,
+  expectedRevision: number,
+): Promise<TripSaveResult | null> {
+  const row = await env.FAIRSHARE_DB.prepare(
+    `UPDATE trips
+     SET payload = CASE
+           WHEN json_extract(payload, '$.pin_hash') IS NULL THEN ?1
+           ELSE json_set(?1, '$.pin_hash', json_extract(payload, '$.pin_hash'))
+         END,
+         updated_at = ?2,
+         revision = revision + 1
+     WHERE id = ?3 AND revision = ?4
+     RETURNING revision, json_extract(payload, '$.pin_hash') IS NOT NULL AS photos_locked`,
+  )
+    .bind(JSON.stringify(trip), new Date().toISOString(), tripId, expectedRevision)
+    .first<{ revision: number; photos_locked: number }>();
+  return row ? { revision: row.revision, photosLocked: Boolean(row.photos_locked) } : null;
+}
+
+/** Sets the PIN hash only if the trip has none. Returns false when it already had one or is gone. */
+export async function setTripPinHash(env: Env, tripId: string, pinHash: string): Promise<boolean> {
+  const result = await env.FAIRSHARE_DB.prepare(
+    `UPDATE trips SET payload = json_set(payload, '$.pin_hash', ?1), updated_at = ?2
+     WHERE id = ?3 AND json_extract(payload, '$.pin_hash') IS NULL`,
+  )
+    .bind(pinHash, new Date().toISOString(), tripId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
 }
 
 export async function deleteTripRow(env: Env, tripId: string): Promise<void> {

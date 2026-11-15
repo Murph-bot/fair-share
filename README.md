@@ -103,6 +103,7 @@ You can also use `fairshare pull` / `fairshare push` with `--host` or `FAIRSHARE
 
 - Bindings (see `wrangler.jsonc`): D1 `fairshare-db`, R2 `fairshare-photos`, KV `PIN_ATTEMPTS`.
 - Schema: `wrangler d1 execute fairshare-db --remote --file db/schema.sql` (and `--local` for dev).
+- Existing databases: apply `db/migrations/*.sql` in order with the same command, before deploying the code that needs them.
 - Secrets: `npx wrangler pages secret put PHOTO_PIN_PEPPER` and `npx wrangler pages secret put CRON_SECRET` (local values go in `.dev.vars`).
 - Deploy: `npm run build:pages && npx wrangler pages deploy web/dist`.
 - Photo expiry: protected `POST /api/admin/expire-photos` (Bearer `CRON_SECRET`) remains on Pages; the separate `fair-share-cron` Worker was removed.

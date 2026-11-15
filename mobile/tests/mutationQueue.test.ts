@@ -78,4 +78,35 @@ describe("mutationQueue", () => {
     expect(queue[0]?.tripId).toBe(tripId);
     expect(queue[0]?.attempts).toBe(1);
   });
+
+  it("reports a conflict instead of retrying a stale snapshot", async () => {
+    const latest = { ...createTrip("Theirs"), photos_locked: false, revision: 2 };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ error: "changed", trip: latest }), { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await enqueue(tripId, createTrip("Mine"), 1);
+
+    const conflicts = await flushQueue();
+    expect(conflicts).toEqual([tripId]);
+    expect(await loadQueue()).toHaveLength(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends each queued snapshot on top of the revision the previous one created", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...createTrip("A"), revision: 5 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...createTrip("A2"), revision: 6 }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await enqueue(tripId, createTrip("A"), 4);
+    await enqueue(tripId, createTrip("A2"), 4);
+
+    expect(await flushQueue()).toEqual([]);
+    const revisions = fetchMock.mock.calls.map(
+      ([, init]) => (JSON.parse((init as RequestInit).body as string) as { revision?: number }).revision,
+    );
+    expect(revisions).toEqual([4, 5]);
+    expect(await loadQueue()).toHaveLength(0);
+  });
 });

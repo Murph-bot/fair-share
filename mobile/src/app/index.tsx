@@ -197,7 +197,7 @@ export default function HomeScreen() {
     try {
       const created = await createRemoteTrip(template.name);
       const trip = createTripFromTemplate(templateId);
-      await saveTrip(created.id, trip);
+      await saveTrip(created.id, trip, created.trip.revision);
       await Promise.all([savePhotoPin(created.id, created.pin), savePhotoToken(created.id, created.photos_token)]);
       router.push({ pathname: "/t/[id]", params: { id: created.id } });
     } catch (caught) {

@@ -281,7 +281,7 @@ export function renderHome(root: HTMLElement): void {
       const raw: unknown = JSON.parse(await file.text());
       const trip = parseTrip(raw);
       const created = await createRemoteTrip(trip.name);
-      await saveTrip(created.id, trip);
+      await saveTrip(created.id, trip, created.trip.revision);
       savePhotoPin(created.id, created.pin);
       savePhotoToken(created.id, created.photos_token);
       announce(`Trip imported: ${created.id}`);
@@ -344,7 +344,7 @@ export function renderHome(root: HTMLElement): void {
       const created: Awaited<ReturnType<typeof createRemoteTrip>>[] = [];
       for (const trip of trips) {
         const remote = await createRemoteTrip(trip.name);
-        await saveTrip(remote.id, trip);
+        await saveTrip(remote.id, trip, remote.trip.revision);
         savePhotoPin(remote.id, remote.pin);
         savePhotoToken(remote.id, remote.photos_token);
         rememberRecent(remote.id, trip.name);

@@ -1,5 +1,5 @@
 import { showQrDialog } from "../qr";
-import { deleteRemoteTrip, fetchTrip, saveTrip, type PublicTrip } from "../api";
+import { deleteRemoteTrip, fetchTrip, saveEdit, type PublicTrip } from "../api";
 import { getTheme, languageButtonHtml, nextLanguage, themeButtonHtml, toggleTheme } from "../theme";
 import {
   addExpense,
@@ -52,13 +52,18 @@ function setBusy(root: HTMLElement, busy: boolean): void {
   });
 }
 
-async function persist(id: string, trip: PublicTrip, banner: HTMLElement): Promise<PublicTrip> {
+async function persist(
+  id: string,
+  base: PublicTrip,
+  edit: (trip: Trip) => Trip,
+  banner: HTMLElement,
+): Promise<PublicTrip> {
   if (saveLock) {
     throw new Error("Still saving the last change");
   }
   saveLock = true;
   try {
-    const saved = await saveTrip(id, trip);
+    const { trip: saved } = await saveEdit(id, base, edit);
     rememberRecent(id, saved.name);
     setBanner(banner, null);
     return saved;
@@ -642,8 +647,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       const amountCents = Number(button.dataset.amount ?? "0");
       try {
         setBusy(root, true);
-        const next = recordPayment(trip, { frm: from, to, amount_cents: amountCents });
-        const saved = await persist(id, next, banner);
+        const edit = (base: Trip): Trip => recordPayment(base, { frm: from, to, amount_cents: amountCents });
+        const saved = await persist(id, trip, edit, banner);
         paint(root, id, saved, editingId);
         if (openPayments(trip) > 0 && openPayments(saved) === 0) coinDrop(root);
       } catch (err) {
@@ -675,12 +680,13 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
           return;
         }
         setBusy(root, true);
-        const next = recordPayment(
-          trip,
+        const edit = (base: Trip): Trip =>
+          recordPayment(
+          base,
           { frm: from, to, amount_cents: amountCents },
           status.paidCents + partialCents,
         );
-        const saved = await persist(id, next, banner);
+        const saved = await persist(id, trip, edit, banner);
         paint(root, id, saved, editingId);
       } catch (err) {
         if (!saveLock) {
@@ -698,8 +704,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       const amountCents = Number(button.dataset.amount ?? "0");
       try {
         setBusy(root, true);
-        const next = unrecordPayment(trip, { frm: from, to, amount_cents: amountCents });
-        const saved = await persist(id, next, banner);
+        const edit = (base: Trip): Trip => unrecordPayment(base, { frm: from, to, amount_cents: amountCents });
+        const saved = await persist(id, trip, edit, banner);
         paint(root, id, saved, editingId);
       } catch (err) {
         if (!saveLock) {
@@ -741,8 +747,9 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   root.querySelector("#archive-trip")?.addEventListener("click", async () => {
     try {
       setBusy(root, true);
-      const next = trip.archivedAt ? unarchiveTrip(trip) : archiveTrip(trip);
-      const saved = await persist(id, next, banner);
+      const archive = !trip.archivedAt;
+      const edit = (base: Trip): Trip => (archive ? archiveTrip(base) : unarchiveTrip(base));
+      const saved = await persist(id, trip, edit, banner);
       paint(root, id, saved, editingId);
     } catch (err) {
       if (!saveLock) {
@@ -776,13 +783,14 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     const input = personForm.elements.namedItem("name") as HTMLInputElement;
     try {
       const before = trip.people.length;
-      const next = addPerson(trip, input.value);
+      const edit = (base: Trip): Trip => addPerson(base, input.value);
+      const next = edit(trip);
       if (next.people.length === before) {
         setBanner(personError, t("That person is already on the trip"));
         return;
       }
       setBusy(root, true);
-      const saved = await persist(id, next, banner);
+      const saved = await persist(id, trip, edit, banner);
       paint(root, id, saved, editingId);
     } catch (err) {
       if (!saveLock) {
@@ -807,8 +815,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       }
       try {
         setBusy(root, true);
-        const next = renamePerson(trip, renamePersonName, newName);
-        const saved = await persist(id, next, banner);
+        const edit = (base: Trip): Trip => renamePerson(base, renamePersonName, newName);
+        const saved = await persist(id, trip, edit, banner);
         paint(root, id, saved, editingId);
       } catch (err) {
         if (!saveLock) {
@@ -819,8 +827,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
     } else if (movePersonName && direction) {
       try {
         setBusy(root, true);
-        const next = movePerson(trip, movePersonName, direction);
-        const saved = await persist(id, next, banner);
+        const edit = (base: Trip): Trip => movePerson(base, movePersonName, direction);
+        const saved = await persist(id, trip, edit, banner);
         paint(root, id, saved, editingId);
       } catch (err) {
         if (!saveLock) {
@@ -875,11 +883,13 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         tip_cents: rawTip && Number(rawTip.replace(",", ".")) > 0 ? parseAmount(rawTip) : undefined,
       };
       const editingExpenseId = expenseFormEl.dataset.editing;
-      const next = editingExpenseId
-        ? updateExpense(trip, editingExpenseId, input)
-        : addExpense(trip, input, crypto.randomUUID());
+      const newExpenseId = crypto.randomUUID();
+      const edit = (base: Trip): Trip =>
+        editingExpenseId
+          ? updateExpense(base, editingExpenseId, input)
+          : addExpense(base, input, newExpenseId);
       setBusy(root, true);
-      const saved = await persist(id, next, banner);
+      const saved = await persist(id, trip, edit, banner);
       paint(root, id, saved);
     } catch (err) {
       if (!saveLock) {
@@ -939,9 +949,9 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
         return;
       }
       try {
-        const next = removeExpense(trip, expenseId);
+        const edit = (base: Trip): Trip => removeExpense(base, expenseId);
         setBusy(root, true);
-        const saved = await persist(id, next, banner);
+        const saved = await persist(id, trip, edit, banner);
         announce(t('Removed "{{description}}"', { description }));
         const stillEditing = editingId && expenseId !== editingId ? editingId : null;
         paint(root, id, saved, stillEditing);

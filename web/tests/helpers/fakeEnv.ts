@@ -13,23 +13,46 @@ export type FakePhoto = { data: Uint8Array; metadata: R2Metadata; uploaded: Date
 export function makeFakeEnv(): {
   env: Env;
   trips: Map<string, unknown>;
+  revisions: Map<string, number>;
   photos: Map<string, FakePhoto>;
   pinAttempts: Map<string, unknown>;
 } {
   const trips = new Map<string, unknown>();
+  const revisions = new Map<string, number>();
   const photos = new Map<string, FakePhoto>();
   const pinAttempts = new Map<string, unknown>();
 
+  const storedPinHash = (id: string): unknown =>
+    (trips.get(id) as { pin_hash?: unknown } | undefined)?.pin_hash;
+
+  // Mirrors the SQL in pages/functions/_shared/stores.ts; the real statements
+  // are exercised against local D1 (see the PR's verification notes).
   const d1: D1Like = {
     prepare(sql: string) {
       return {
         bind(...values: unknown[]) {
-          const [a, b, c] = values;
+          const [a, b, c, d] = values;
           return {
             async first<T>() {
-              if (sql.includes("SELECT payload FROM trips")) {
+              if (sql.includes("SELECT payload")) {
                 const raw = trips.get(String(a));
-                return (raw === undefined ? null : { payload: JSON.stringify(raw) }) as T;
+                return (
+                  raw === undefined
+                    ? null
+                    : { payload: JSON.stringify(raw), revision: revisions.get(String(a)) ?? 0 }
+                ) as T;
+              }
+              if (sql.includes("revision = revision + 1")) {
+                const id = String(c);
+                if (!trips.has(id) || (revisions.get(id) ?? 0) !== d) {
+                  return null as T;
+                }
+                const pinHash = storedPinHash(id);
+                const next = JSON.parse(String(a)) as Record<string, unknown>;
+                trips.set(id, pinHash === undefined ? next : { ...next, pin_hash: pinHash });
+                const revision = (revisions.get(id) ?? 0) + 1;
+                revisions.set(id, revision);
+                return { revision, photos_locked: pinHash === undefined ? 0 : 1 } as T;
               }
               return null as T;
             },
@@ -37,10 +60,18 @@ export function makeFakeEnv(): {
               if (sql.includes("INSERT INTO trips")) {
                 trips.set(String(a), JSON.parse(String(b)) as unknown);
                 void c;
+              } else if (sql.includes("json_set(payload, '$.pin_hash'")) {
+                const id = String(c);
+                if (!trips.has(id) || storedPinHash(id) !== undefined) {
+                  return { meta: { changes: 0 } };
+                }
+                trips.set(id, { ...(trips.get(id) as object), pin_hash: a });
+                return { meta: { changes: 1 } };
               } else if (sql.includes("DELETE FROM trips")) {
                 trips.delete(String(a));
+                revisions.delete(String(a));
               }
-              return { meta: {} };
+              return { meta: { changes: 1 } };
             },
             async all() {
               return { results: [] };
@@ -138,6 +169,7 @@ export function makeFakeEnv(): {
       PHOTO_PIN_PEPPER: TEST_PEPPER,
     },
     trips,
+    revisions,
     photos,
     pinAttempts,
   };

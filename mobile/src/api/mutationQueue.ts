@@ -1,5 +1,5 @@
 import { getDataStore } from "./storage";
-import { saveTrip } from "./tripApi";
+import { saveTrip, TripConflictError } from "./tripApi";
 import type { Trip } from "../domain";
 
 const QUEUE_KEY = "fairshare.mutation.queue";
@@ -9,6 +9,8 @@ const MAX_ATTEMPTS = 5;
 export type QueuedMutation = {
   tripId: string;
   trip: Trip;
+  /** Server revision the snapshot was made from. */
+  revision?: number;
   timestamp: string;
   attempts?: number;
 };
@@ -51,9 +53,9 @@ export async function saveQueue(queue: QueuedMutation[]): Promise<void> {
   }
 }
 
-export async function enqueue(tripId: string, trip: Trip): Promise<void> {
+export async function enqueue(tripId: string, trip: Trip, revision?: number): Promise<void> {
   const queue = await loadQueue();
-  queue.push({ tripId, trip, timestamp: new Date().toISOString() });
+  queue.push({ tripId, trip, revision, timestamp: new Date().toISOString() });
   await saveQueue(queue);
 }
 
@@ -68,19 +70,37 @@ export async function hasQueued(tripId: string): Promise<boolean> {
   return queue.some((item) => item.tripId === tripId);
 }
 
-export async function flushQueue(): Promise<void> {
+/**
+ * Sends queued snapshots in order. Returns the trips whose queued edits were
+ * dropped because the server copy had changed, so the caller can tell the user.
+ */
+export async function flushQueue(): Promise<string[]> {
   const queue = await loadQueue();
-  if (queue.length === 0) {
-    return;
-  }
+  const conflicts: string[] = [];
+  const savedRevisions = new Map<string, number>();
   for (const item of queue) {
+    if (conflicts.includes(item.tripId)) {
+      continue;
+    }
     try {
-      await saveTrip(item.tripId, item.trip);
+      // Later snapshots of a trip were made on top of earlier queued ones, so
+      // each goes out on the revision the previous one created.
+      const saved = await saveTrip(item.tripId, item.trip, savedRevisions.get(item.tripId) ?? item.revision);
+      if (saved.revision !== undefined) {
+        savedRevisions.set(item.tripId, saved.revision);
+      }
       await dequeue(item.tripId, item.timestamp);
     } catch (caught) {
       // Network failure: everything behind this would fail too — retry later.
       if (caught instanceof TypeError) {
         break;
+      }
+      // Retrying a stale snapshot can never succeed and would overwrite newer
+      // data if it did, so every queued edit for this trip goes.
+      if (caught instanceof TripConflictError) {
+        conflicts.push(item.tripId);
+        await saveQueue((await loadQueue()).filter((queued) => queued.tripId !== item.tripId));
+        continue;
       }
       // A permanent failure (e.g. trip deleted remotely, validation error)
       // must not block the rest of the queue forever. Retry a few times,
@@ -98,4 +118,5 @@ export async function flushQueue(): Promise<void> {
       }
     }
   }
+  return conflicts;
 }
