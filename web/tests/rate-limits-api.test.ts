@@ -100,8 +100,8 @@ describe("rate limits", () => {
 });
 
 describe("clientKey", () => {
-  const key = (ip?: string) =>
-    clientKey(new Request("https://example.com/", ip ? { headers: { "CF-Connecting-IP": ip } } : {}));
+  const key = (ip?: string, env: { FAIRSHARE_PROXY_SECRET?: string } = {}) =>
+    clientKey(new Request("https://example.com/", ip ? { headers: { "CF-Connecting-IP": ip } } : {}), env);
 
   it("keeps IPv4 as is", () => {
     expect(key("203.0.113.5")).toBe("203.0.113.5");
@@ -119,6 +119,74 @@ describe("clientKey", () => {
 
   it("falls back to unknown without the header", () => {
     expect(key()).toBe("unknown");
+  });
+});
+
+describe("clientKey behind the pithelo proxy", () => {
+  const SECRET = "test-proxy-secret";
+  const EGRESS = "2a06:98c0:3600::103";
+  const via = (headers: Record<string, string>, env: { FAIRSHARE_PROXY_SECRET?: string }) =>
+    clientKey(
+      new Request("https://example.com/", { headers: { "CF-Connecting-IP": EGRESS, ...headers } }),
+      env,
+    );
+  const egressKey = "2a06:98c0:3600:0000::/64";
+
+  it("uses the forwarded IP when the secret matches", () => {
+    const headers = { "X-FairShare-Client-IP": "198.51.100.7", "X-FairShare-Proxy-Secret": SECRET };
+    expect(via(headers, { FAIRSHARE_PROXY_SECRET: SECRET })).toBe("198.51.100.7");
+  });
+
+  it("reduces a forwarded IPv6 address to its /64", () => {
+    const headers = { "X-FairShare-Client-IP": "2001:db8:1:2::9", "X-FairShare-Proxy-Secret": SECRET };
+    expect(via(headers, { FAIRSHARE_PROXY_SECRET: SECRET })).toBe("2001:0db8:0001:0002::/64");
+  });
+
+  it("ignores the forwarded IP when the secret is wrong", () => {
+    const headers = { "X-FairShare-Client-IP": "198.51.100.7", "X-FairShare-Proxy-Secret": "nope" };
+    expect(via(headers, { FAIRSHARE_PROXY_SECRET: SECRET })).toBe(egressKey);
+  });
+
+  it("ignores the forwarded IP when the secret header is missing", () => {
+    expect(via({ "X-FairShare-Client-IP": "198.51.100.7" }, { FAIRSHARE_PROXY_SECRET: SECRET })).toBe(
+      egressKey,
+    );
+  });
+
+  it("ignores the forwarded IP when no secret is configured", () => {
+    const headers = { "X-FairShare-Client-IP": "198.51.100.7", "X-FairShare-Proxy-Secret": SECRET };
+    expect(via(headers, {})).toBe(egressKey);
+    expect(via({ ...headers, "X-FairShare-Proxy-Secret": "" }, { FAIRSHARE_PROXY_SECRET: "" })).toBe(
+      egressKey,
+    );
+  });
+
+  it("falls back when the forwarded value is not an IP literal or is too long", () => {
+    const base = { "X-FairShare-Proxy-Secret": SECRET };
+    const env = { FAIRSHARE_PROXY_SECRET: SECRET };
+    for (const bad of ["not-an-ip", "198.51.100.7, 10.0.0.1", "999.1.1.1", "a".repeat(200), "::g", ""]) {
+      expect(via({ ...base, "X-FairShare-Client-IP": bad }, env)).toBe(egressKey);
+    }
+  });
+
+  it("never echoes the proxy headers in a response", async () => {
+    const { env } = makeFakeEnv();
+    const res = await handleApiRequest(
+      new Request("https://example.com/api/trips", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": EGRESS,
+          "X-FairShare-Client-IP": "198.51.100.7",
+          "X-FairShare-Proxy-Secret": SECRET,
+        },
+        body: JSON.stringify({ name: "Trip" }),
+      }),
+      { ...env, FAIRSHARE_PROXY_SECRET: SECRET },
+    );
+    expect(res.status).toBe(201);
+    expect([...res.headers.keys()].some((k) => k.startsWith("x-fairshare"))).toBe(false);
+    expect(await res.text()).not.toContain(SECRET);
   });
 });
 

@@ -50,4 +50,5 @@ export type Env = {
   FAIRSHARE_PHOTOS: R2BucketLike;
   PHOTO_PIN_PEPPER: string;
   CRON_SECRET?: string;
+  FAIRSHARE_PROXY_SECRET?: string;
 };

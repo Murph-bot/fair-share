@@ -278,7 +278,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
     if (denied) {
       return denied;
     }
-    await limitPhotoUpload(env, clientKey(req));
+    await limitPhotoUpload(env, clientKey(req, env));
     if ((await countPhotos(env, tripId)) >= MAX_PHOTOS_PER_TRIP) {
       throw new ValidationError(`A trip can hold at most ${MAX_PHOTOS_PER_TRIP} photos`);
     }
@@ -356,7 +356,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
     }
 
     if (path === "/api/trips" && req.method === "POST") {
-      await limitTripCreation(env, clientKey(req));
+      await limitTripCreation(env, clientKey(req, env));
       const payload = await readJsonBody(req);
       if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
         throw new ValidationError("Body must be an object");
@@ -389,7 +389,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
       if (req.method !== "POST") {
         return json(405, { error: "Method not allowed" });
       }
-      return await handleSession(req, env, tripId, clientKey(req));
+      return await handleSession(req, env, tripId, clientKey(req, env));
     }
     if (rest === "/pin") {
       if (req.method !== "POST") {

@@ -1,5 +1,6 @@
 import type { Trip } from "../../../packages/domain/src/trip";
 import { FairShareError, ValidationError } from "../../../packages/domain/src/errors";
+import { timingSafeEqual } from "../../../packages/domain/src/pin";
 import type { Env } from "./env";
 
 export const MAX_JSON_BYTES = 200_000;
@@ -96,15 +97,50 @@ export function bearerToken(req: Request): string | undefined {
   return token || undefined;
 }
 
-export function clientIp(req: Request): string {
-  return req.headers.get("CF-Connecting-IP") ?? "unknown";
+const MAX_FORWARDED_IP_LENGTH = 45;
+
+const IPV4_LITERAL = /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/;
+const IPV6_CHARS = /^[0-9a-fA-F:.]+$/;
+
+function isIpLiteral(value: string): boolean {
+  if (value.length > MAX_FORWARDED_IP_LENGTH) {
+    return false;
+  }
+  if (IPV4_LITERAL.test(value)) {
+    return true;
+  }
+  if (!value.includes(":") || !IPV6_CHARS.test(value)) {
+    return false;
+  }
+  try {
+    new URL(`http://[${value}]/`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// A Worker on another zone sees only Cloudflare's egress address as CF-Connecting-IP, so the
+// pithelo proxy forwards the visitor's address. It is trusted only with the shared secret.
+function forwardedClientIp(req: Request, env: Pick<Env, "FAIRSHARE_PROXY_SECRET">): string | undefined {
+  const expected = env.FAIRSHARE_PROXY_SECRET;
+  const secret = req.headers.get("X-FairShare-Proxy-Secret");
+  const forwarded = req.headers.get("X-FairShare-Client-IP")?.trim();
+  if (!expected || !secret || !forwarded || !timingSafeEqual(secret, expected)) {
+    return undefined;
+  }
+  return isIpLiteral(forwarded) ? forwarded : undefined;
+}
+
+export function clientIp(req: Request, env: Pick<Env, "FAIRSHARE_PROXY_SECRET">): string {
+  return forwardedClientIp(req, env) ?? req.headers.get("CF-Connecting-IP") ?? "unknown";
 }
 
 const IPV4_MAPPED = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/;
 
 // Rate limits key on the /64, since one household or host controls a whole /64.
-export function clientKey(req: Request): string {
-  const ip = clientIp(req).toLowerCase();
+export function clientKey(req: Request, env: Pick<Env, "FAIRSHARE_PROXY_SECRET">): string {
+  const ip = clientIp(req, env).toLowerCase();
   const mapped = IPV4_MAPPED.exec(ip);
   if (mapped) {
     return mapped[1];
