@@ -563,6 +563,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       <section class="block print-only" id="print-summary" aria-hidden="true">
         ${summaryHtml(trip)}
       </section>
+      <p class="muted footer-note"><a href="privacy">${t("Privacy")}</a></p>
     </main>
   `;
 
