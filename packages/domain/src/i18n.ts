@@ -8,6 +8,7 @@ const en: Translations = {
 
 const el: Translations = {
   "Fair Share": "Fair Share",
+  "Privacy": "Απόρρητο",
   "Split trip expenses fairly": "Διαίρεση εξόδων ταξιδιού δίκαια",
   "Create a trip, add people, and share the link. No accounts, no ads.":
     "Δημιούργησε ένα ταξίδι, πρόσθεσε άτομα και μοιράσου τον σύνδεσμο. Χωρίς λογαριασμούς, χωρίς διαφημίσεις.",

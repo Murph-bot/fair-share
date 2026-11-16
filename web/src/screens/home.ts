@@ -127,6 +127,7 @@ export function renderHome(root: HTMLElement): void {
       ${installBlock}
 
       <p class="muted footer-note">${t("No accounts, no ads, no tracking. Your data lives on the trip link, and backups stay on this device.")}</p>
+      <p class="muted footer-note"><a href="privacy">${t("Privacy")}</a></p>
     </main>
   `;
 

@@ -65,6 +65,26 @@ export async function setTripPinHash(env: Env, tripId: string, pinHash: string):
   return (result.meta.changes ?? 0) > 0;
 }
 
+/** Marks the trip as changed without bumping its revision, so clients' saves are unaffected. */
+export async function touchTrip(env: Env, tripId: string): Promise<void> {
+  await env.FAIRSHARE_DB.prepare("UPDATE trips SET updated_at = ? WHERE id = ?")
+    .bind(new Date().toISOString(), tripId)
+    .run();
+}
+
+export async function listTripIdsNotChangedSince(
+  env: Env,
+  cutoffIso: string,
+  limit: number,
+): Promise<string[]> {
+  const { results } = await env.FAIRSHARE_DB.prepare(
+    "SELECT id FROM trips WHERE updated_at < ? ORDER BY updated_at LIMIT ?",
+  )
+    .bind(cutoffIso, limit)
+    .all<{ id: string }>();
+  return results.map((row) => row.id);
+}
+
 export async function deleteTripRow(env: Env, tripId: string): Promise<void> {
   await env.FAIRSHARE_DB.prepare("DELETE FROM trips WHERE id = ?").bind(tripId).run();
 }
@@ -154,18 +174,14 @@ export async function countPhotos(env: Env, tripId: string): Promise<number> {
   return (await listPhotos(env, tripId)).length;
 }
 
-export async function listAllPhotoKeys(
-  env: Env,
-): Promise<Array<{ key: string; uploadedAt: string }>> {
-  const keys: Array<{ key: string; uploadedAt: string }> = [];
+/** Removes every object stored under the trip, display copies and originals alike. */
+export async function deleteAllTripPhotos(env: Env, tripId: string): Promise<void> {
   let cursor: string | undefined;
   do {
-    const listed = await env.FAIRSHARE_PHOTOS.list({ cursor, limit: 1000 });
-    for (const obj of listed.objects) {
-      const uploadedAt = obj.customMetadata?.uploadedAt ?? obj.uploaded.toISOString();
-      keys.push({ key: obj.key, uploadedAt });
+    const listed = await env.FAIRSHARE_PHOTOS.list({ prefix: `${tripId}/`, cursor, limit: 1000 });
+    if (listed.objects.length > 0) {
+      await env.FAIRSHARE_PHOTOS.delete(listed.objects.map((obj) => obj.key));
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  return keys;
 }

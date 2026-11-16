@@ -106,9 +106,9 @@ You can also use `fairshare pull` / `fairshare push` with `--host` or `FAIRSHARE
 - Existing databases: apply `db/migrations/*.sql` in order with the same command, before deploying the code that needs them.
 - Secrets: `npx wrangler pages secret put PHOTO_PIN_PEPPER` and `npx wrangler pages secret put CRON_SECRET` (local values go in `.dev.vars`).
 - Deploy: `npm run build:pages && npx wrangler pages deploy web/dist`.
-- Photo expiry: protected `POST /api/admin/expire-photos` (Bearer `CRON_SECRET`) remains on Pages; the separate `fair-share-cron` Worker was removed.
+- Retention: trips and their photos are deleted 12 months after the trip last changed (an expense or person edit, a PIN set, a photo added or removed). Pages Functions have no cron, so `.github/workflows/purge-expired-trips.yml` calls `POST /api/admin/purge-expired-trips` (Bearer `CRON_SECRET`) daily, using the repo secret `FAIRSHARE_CRON_SECRET`. The endpoint deletes 10 trips per call and answers `{"deleted":n,"more":bool}`; the workflow repeats until `more` is false.
 
-Photos are stored in R2 (display copies + full-res originals, uploaded in one request), compressed on the device, and removed automatically after a year. Thumbnails are CSS-cropped originals — no paid image transforms. Originals are kept at full quality in R2.
+Photos are stored in R2 (display copies + full-res originals, uploaded in one request), compressed on the device, and deleted with their trip 12 months after the trip last changed. Thumbnails are CSS-cropped originals — no paid image transforms. Originals are kept at full quality in R2.
 
 ## Mobile app
 

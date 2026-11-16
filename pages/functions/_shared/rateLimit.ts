@@ -19,6 +19,10 @@ const HIT_SQL = `INSERT INTO rate_limits (key, count, expires_at) VALUES (?1, 1,
 
 const PRUNE_SQL = "DELETE FROM rate_limits WHERE expires_at < ?";
 
+export async function pruneRateLimits(env: Env): Promise<void> {
+  await env.FAIRSHARE_DB.prepare(PRUNE_SQL).bind(Math.floor(Date.now() / 1000)).run();
+}
+
 async function hit(env: Env, scope: string, subject: string, windowSeconds: number): Promise<number> {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const windowIndex = Math.floor(nowSeconds / windowSeconds);

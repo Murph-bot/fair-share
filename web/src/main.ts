@@ -4,6 +4,7 @@ import { initLanguage } from "./i18n";
 import { captureInstallPrompt } from "./install";
 import { initCrashReporting } from "./crash";
 import { renderHome } from "./screens/home";
+import { renderPrivacy } from "./screens/privacy";
 import { renderTrip } from "./screens/trip";
 import { appPath, isAppPath } from "./paths";
 
@@ -22,6 +23,10 @@ function route(): void {
   const match = /^\/t\/([a-f0-9]{32})$/.exec(path);
   if (path === "/") {
     renderHome(root);
+    return;
+  }
+  if (path === "/privacy") {
+    renderPrivacy(root);
     return;
   }
   if (match && TRIP_ID_RE.test(match[1])) {
