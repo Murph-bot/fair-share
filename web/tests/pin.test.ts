@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PHOTO_RETENTION_MS } from "@fairshare/domain/photos";
+import { TRIP_RETENTION_MS } from "@fairshare/domain/photos";
 import {
   createSessionToken,
   generatePin,
@@ -63,7 +63,7 @@ describe("PIN helpers", () => {
     expect(normalizePin("abcdef")).toBeUndefined();
   });
 
-  it("keeps photos for one year", () => {
-    expect(PHOTO_RETENTION_MS).toBe(365 * 24 * 60 * 60 * 1000);
+  it("keeps trips for one year after the last change", () => {
+    expect(TRIP_RETENTION_MS).toBe(365 * 24 * 60 * 60 * 1000);
   });
 });

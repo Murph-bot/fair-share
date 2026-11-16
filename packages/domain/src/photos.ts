@@ -5,7 +5,8 @@ export const MAX_PHOTOS_PER_TRIP = 100;
 export const MAX_PHOTO_BYTES = 4_000_000;
 export const MAX_ORIGINAL_BYTES = 10_000_000;
 export const PHOTO_MAX_EDGE = 1600;
-export const PHOTO_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+// Trips and their photos are deleted this long after the trip last changed.
+export const TRIP_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 
 export type PhotoRecord = {
   id: string;

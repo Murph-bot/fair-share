@@ -13,11 +13,13 @@ export function makeFakeEnv(): {
   env: Env;
   trips: Map<string, unknown>;
   revisions: Map<string, number>;
+  updatedAt: Map<string, string>;
   photos: Map<string, FakePhoto>;
   counters: Map<string, { count: number; expiresAt: number }>;
 } {
   const trips = new Map<string, unknown>();
   const revisions = new Map<string, number>();
+  const updatedAt = new Map<string, string>();
   const photos = new Map<string, FakePhoto>();
   const counters = new Map<string, { count: number; expiresAt: number }>();
 
@@ -55,6 +57,7 @@ export function makeFakeEnv(): {
                 const pinHash = storedPinHash(id);
                 const next = JSON.parse(String(a)) as Record<string, unknown>;
                 trips.set(id, pinHash === undefined ? next : { ...next, pin_hash: pinHash });
+                updatedAt.set(id, String(b));
                 const revision = (revisions.get(id) ?? 0) + 1;
                 revisions.set(id, revision);
                 return { revision, photos_locked: pinHash === undefined ? 0 : 1 } as T;
@@ -64,13 +67,14 @@ export function makeFakeEnv(): {
             async run() {
               if (sql.includes("INSERT INTO trips")) {
                 trips.set(String(a), JSON.parse(String(b)) as unknown);
-                void c;
+                updatedAt.set(String(a), String(c));
               } else if (sql.includes("json_set(payload, '$.pin_hash'")) {
                 const id = String(c);
                 if (!trips.has(id) || storedPinHash(id) !== undefined) {
                   return { meta: { changes: 0 } };
                 }
                 trips.set(id, { ...(trips.get(id) as object), pin_hash: a });
+                updatedAt.set(id, String(b));
                 return { meta: { changes: 1 } };
               } else if (sql.includes("DELETE FROM rate_limits")) {
                 for (const [key, row] of counters) {
@@ -78,13 +82,27 @@ export function makeFakeEnv(): {
                     counters.delete(key);
                   }
                 }
+              } else if (sql.includes("UPDATE trips SET updated_at")) {
+                if (!trips.has(String(b))) {
+                  return { meta: { changes: 0 } };
+                }
+                updatedAt.set(String(b), String(a));
               } else if (sql.includes("DELETE FROM trips")) {
                 trips.delete(String(a));
                 revisions.delete(String(a));
+                updatedAt.delete(String(a));
               }
               return { meta: { changes: 1 } };
             },
             async all() {
+              if (sql.includes("SELECT id FROM trips WHERE updated_at")) {
+                const ids = [...updatedAt.entries()]
+                  .filter(([, at]) => at < String(a))
+                  .sort(([, x], [, y]) => x.localeCompare(y))
+                  .slice(0, Number(b))
+                  .map(([id]) => ({ id }));
+                return { results: ids as never[] };
+              }
               return { results: [] };
             },
           };
@@ -132,8 +150,10 @@ export function makeFakeEnv(): {
         uploaded: new Date(),
       });
     },
-    async delete(key) {
-      photos.delete(key);
+    async delete(keys) {
+      for (const key of Array.isArray(keys) ? keys : [keys]) {
+        photos.delete(key);
+      }
     },
     async list(options) {
       const prefix = options?.prefix ?? "";
@@ -161,6 +181,7 @@ export function makeFakeEnv(): {
     },
     trips,
     revisions,
+    updatedAt,
     photos,
     counters,
   };

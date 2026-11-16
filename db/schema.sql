@@ -21,3 +21,6 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS rate_limits_expires_at ON rate_limits (expires_at);
+
+-- Retention purge looks up trips by last change (migration 0003).
+CREATE INDEX IF NOT EXISTS trips_updated_at ON trips (updated_at);

@@ -1,0 +1,40 @@
+name: Purge expired trips
+
+# Pages Functions have no cron, so this calls the protected purge endpoint once a day.
+# Needs one repo secret: FAIRSHARE_CRON_SECRET, the same value as the CRON_SECRET
+# secret on the fair-share-trips Pages project.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: purge-expired-trips
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PURGE_URL: https://fair-share-trips.pages.dev/api/admin/purge-expired-trips
+      CRON_SECRET: ${{ secrets.FAIRSHARE_CRON_SECRET }}
+    steps:
+      - name: Purge in batches until none are left
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "FAIRSHARE_CRON_SECRET is not set in repo secrets" >&2
+            exit 1
+          fi
+          for i in $(seq 1 50); do
+            body=$(curl --silent --show-error --fail-with-body --max-time 60 \
+              -X POST -H "Authorization: Bearer $CRON_SECRET" "$PURGE_URL")
+            echo "batch $i: $body"
+            case "$body" in
+              *'"more":false'*) exit 0 ;;
+            esac
+          done
+          echo "Still more trips after 50 batches; the next run continues" >&2

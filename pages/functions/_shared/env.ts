@@ -37,7 +37,7 @@ export interface R2BucketLike {
     value: ArrayBuffer | Uint8Array | string,
     options?: { customMetadata?: R2Metadata },
   ): Promise<unknown>;
-  delete(key: string): Promise<void>;
+  delete(keys: string | string[]): Promise<void>;
   list(options?: { prefix?: string; cursor?: string; limit?: number }): Promise<{
     objects: R2ObjectLike[];
     truncated: boolean;

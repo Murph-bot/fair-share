@@ -28,8 +28,9 @@ import {
   putPhoto,
   replaceTripAtRevision,
   setTripPinHash,
+  touchTrip,
 } from "../_shared/stores";
-import { expireDuePhotos } from "../_shared/expiry";
+import { purgeExpiredTrips } from "../_shared/expiry";
 import { limitPhotoUpload, limitPinAttempt, limitTripCreation } from "../_shared/rateLimit";
 import {
   bearerToken,
@@ -254,6 +255,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
       return json(404, { error: "Photo not found" });
     }
     await deletePhotoObject(env, tripId, photoId);
+    await touchTrip(env, tripId);
     return json(200, { ok: true });
   }
 
@@ -325,6 +327,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
 
     const uploadedAt = new Date().toISOString();
     await putPhoto(env, tripId, photoId, buffer, { contentType: "image/jpeg", uploadedAt }, originalBuffer);
+    await touchTrip(env, tripId);
     const urls = await photoUrls(env, tripId, photoId, locked, originalBuffer !== null);
     return json(201, {
       photo: { id: photoId, createdAt: uploadedAt, ...urls },
@@ -343,7 +346,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
     const url = new URL(req.url);
     const path = url.pathname;
 
-    if (path === "/api/admin/expire-photos") {
+    if (path === "/api/admin/purge-expired-trips") {
       if (req.method !== "POST") {
         return json(405, { error: "Method not allowed" });
       }
@@ -351,8 +354,7 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
       if (!env.CRON_SECRET || !secret || !timingSafeEqual(secret, env.CRON_SECRET)) {
         return json(403, { error: "Forbidden" });
       }
-      await expireDuePhotos(env);
-      return json(200, { ok: true });
+      return json(200, await purgeExpiredTrips(env));
     }
 
     if (path === "/api/trips" && req.method === "POST") {
