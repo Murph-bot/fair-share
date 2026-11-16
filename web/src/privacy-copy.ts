@@ -68,7 +68,7 @@ const en: PrivacyCopy = {
     {
       heading: "How long I keep it",
       paragraphs: [
-        "A trip and all its photos are deleted 12 months after the trip last changed: an expense or person edited, a PIN set, or a photo added or removed. Opening a trip does not count as a change. A daily job does the deletion. You can delete a trip sooner with Delete in the trip's More menu, or ask me by email.",
+        "A trip and all its photos are deleted 12 months after the trip last changed: an expense or person edited, a PIN set, or a photo added or removed. Opening a trip does not count as a change. A daily job does the deletion. You can delete a trip sooner with Delete in the trip's More menu, or ask me by email. After a deletion, the trip may remain for up to 30 days in the database's point-in-time backups before it disappears.",
       ],
     },
     {
@@ -137,7 +137,7 @@ const el: PrivacyCopy = {
     {
       heading: "Πόσο καιρό τα κρατώ",
       paragraphs: [
-        "Ένα ταξίδι και όλες οι φωτογραφίες του διαγράφονται 12 μήνες μετά την τελευταία αλλαγή του: επεξεργασία εξόδου ή ατόμου, ορισμός PIN, ή προσθήκη ή διαγραφή φωτογραφίας. Το άνοιγμα ενός ταξιδιού δεν μετράει ως αλλαγή. Τη διαγραφή την κάνει καθημερινή διαδικασία. Μπορείς να διαγράψεις ένα ταξίδι νωρίτερα με το Διαγραφή στο μενού Περισσότερα του ταξιδιού, ή να μου το ζητήσεις με email.",
+        "Ένα ταξίδι και όλες οι φωτογραφίες του διαγράφονται 12 μήνες μετά την τελευταία αλλαγή του: επεξεργασία εξόδου ή ατόμου, ορισμός PIN, ή προσθήκη ή διαγραφή φωτογραφίας. Το άνοιγμα ενός ταξιδιού δεν μετράει ως αλλαγή. Τη διαγραφή την κάνει καθημερινή διαδικασία. Μπορείς να διαγράψεις ένα ταξίδι νωρίτερα με το Διαγραφή στο μενού Περισσότερα του ταξιδιού, ή να μου το ζητήσεις με email. Μετά τη διαγραφή, το ταξίδι μπορεί να παραμείνει έως και 30 ημέρες στα αντίγραφα ασφαλείας της βάσης δεδομένων (point-in-time) πριν εξαφανιστεί.",
       ],
     },
     {
