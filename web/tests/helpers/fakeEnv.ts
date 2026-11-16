@@ -1,7 +1,6 @@
 import type {
   D1Like,
   Env,
-  KVLike,
   R2BucketLike,
   R2Metadata,
 } from "../../../pages/functions/_shared/env";
@@ -15,12 +14,12 @@ export function makeFakeEnv(): {
   trips: Map<string, unknown>;
   revisions: Map<string, number>;
   photos: Map<string, FakePhoto>;
-  pinAttempts: Map<string, unknown>;
+  counters: Map<string, { count: number; expiresAt: number }>;
 } {
   const trips = new Map<string, unknown>();
   const revisions = new Map<string, number>();
   const photos = new Map<string, FakePhoto>();
-  const pinAttempts = new Map<string, unknown>();
+  const counters = new Map<string, { count: number; expiresAt: number }>();
 
   const storedPinHash = (id: string): unknown =>
     (trips.get(id) as { pin_hash?: unknown } | undefined)?.pin_hash;
@@ -41,6 +40,12 @@ export function makeFakeEnv(): {
                     ? null
                     : { payload: JSON.stringify(raw), revision: revisions.get(String(a)) ?? 0 }
                 ) as T;
+              }
+              if (sql.includes("INSERT INTO rate_limits")) {
+                const key = String(a);
+                const count = (counters.get(key)?.count ?? 0) + 1;
+                counters.set(key, { count, expiresAt: Number(b) });
+                return { count } as T;
               }
               if (sql.includes("revision = revision + 1")) {
                 const id = String(c);
@@ -67,6 +72,12 @@ export function makeFakeEnv(): {
                 }
                 trips.set(id, { ...(trips.get(id) as object), pin_hash: a });
                 return { meta: { changes: 1 } };
+              } else if (sql.includes("DELETE FROM rate_limits")) {
+                for (const [key, row] of counters) {
+                  if (row.expiresAt < Number(a)) {
+                    counters.delete(key);
+                  }
+                }
               } else if (sql.includes("DELETE FROM trips")) {
                 trips.delete(String(a));
                 revisions.delete(String(a));
@@ -142,35 +153,15 @@ export function makeFakeEnv(): {
     },
   };
 
-  const kv: KVLike = {
-    async get(key, type) {
-      const value = pinAttempts.get(key);
-      if (value === undefined) {
-        return null;
-      }
-      if (type === "json" && typeof value === "string") {
-        return JSON.parse(value) as unknown;
-      }
-      return value;
-    },
-    async put(key, value) {
-      pinAttempts.set(key, value);
-    },
-    async delete(key) {
-      pinAttempts.delete(key);
-    },
-  };
-
   return {
     env: {
       FAIRSHARE_DB: d1,
       FAIRSHARE_PHOTOS: r2,
-      PIN_ATTEMPTS: kv,
       PHOTO_PIN_PEPPER: TEST_PEPPER,
     },
     trips,
     revisions,
     photos,
-    pinAttempts,
+    counters,
   };
 }

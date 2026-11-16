@@ -45,16 +45,10 @@ export interface R2BucketLike {
   }>;
 }
 
-export interface KVLike {
-  get(key: string, type?: "json"): Promise<unknown>;
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
-  delete(key: string): Promise<void>;
-}
-
 export type Env = {
   FAIRSHARE_DB: D1Like;
   FAIRSHARE_PHOTOS: R2BucketLike;
-  PIN_ATTEMPTS: KVLike;
   PHOTO_PIN_PEPPER: string;
   CRON_SECRET?: string;
+  FAIRSHARE_PROXY_SECRET?: string;
 };

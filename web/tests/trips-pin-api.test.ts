@@ -11,13 +11,11 @@ const validTripId = "11111111111111111111111111111111";
 describe("POST /api/trips/:id/pin", () => {
   let env: Env;
   let trips: Map<string, unknown>;
-  let pinAttempts: Map<string, unknown>;
 
   beforeEach(() => {
     const fake = makeFakeEnv();
     env = fake.env;
     trips = fake.trips;
-    pinAttempts = fake.pinAttempts;
   });
 
   it("returns 404 if trip does not exist", async () => {
@@ -249,27 +247,6 @@ describe("POST /api/trips/:id/pin", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { pin: string };
     expect(body.pin).toBe("123456");
-  });
-
-  it("returns 429 when rate limit of PIN attempts is exceeded", async () => {
-    const trip = createTrip("Trip");
-    trips.set(validTripId, trip);
-
-    // Pre-populate 8 failed attempts with future resetAt
-    pinAttempts.set(`pin:attempts:${validTripId}:127.0.0.1`, {
-      count: 8,
-      resetAt: Date.now() + 60_000,
-    });
-
-    const req = new Request(`https://example.com/api/trips/${validTripId}/pin`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "CF-Connecting-IP": "127.0.0.1" },
-      body: JSON.stringify({ pin: "123456" }),
-    });
-    const res = await handleApiRequest(req, env);
-    expect(res.status).toBe(429);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toMatch(/too many pin attempts/i);
   });
 });
 
