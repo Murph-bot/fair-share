@@ -30,6 +30,7 @@ import {
   setTripPinHash,
   touchTrip,
 } from "../_shared/stores";
+import { stripJpegMetadata } from "../_shared/jpeg";
 import { purgeExpiredTrips } from "../_shared/expiry";
 import { limitPhotoUpload, limitPinAttempt, limitTripCreation } from "../_shared/rateLimit";
 import {
@@ -43,6 +44,7 @@ import {
   pinPepper,
   publicTrip,
   readJsonBody,
+  withApiHeaders,
 } from "../_shared/http";
 import type { Env } from "../_shared/env";
 
@@ -74,12 +76,18 @@ async function photoUrls(
   hasOriginal: boolean,
 ): Promise<{ displayUrl: string; thumbUrl: string; originalUrl: string | null }> {
   const base = `/uploads/photos/${tripId}/${photoId}`;
-  let displayUrl = base;
-  if (locked) {
-    const { exp, sig } = await signPhotoAccess(tripId, photoId, pinPepper(env));
-    displayUrl = `${base}?exp=${exp}&sig=${sig}`;
+  if (!locked) {
+    return { displayUrl: base, thumbUrl: base, originalUrl: hasOriginal ? `${base}?original=1` : null };
   }
-  const originalUrl = hasOriginal ? `${displayUrl}${locked ? "&" : "?"}original=1` : null;
+  const pepper = pinPepper(env);
+  const now = Math.floor(Date.now() / 1000);
+  const display = await signPhotoAccess(tripId, photoId, pepper, now, "display");
+  const displayUrl = `${base}?exp=${display.exp}&sig=${display.sig}`;
+  if (!hasOriginal) {
+    return { displayUrl, thumbUrl: displayUrl, originalUrl: null };
+  }
+  const original = await signPhotoAccess(tripId, photoId, pepper, now, "original");
+  const originalUrl = `${base}?exp=${original.exp}&sig=${original.sig}&original=1`;
   return { displayUrl, thumbUrl: displayUrl, originalUrl };
 }
 
@@ -298,10 +306,11 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
     if (type !== "image/jpeg" && type !== "image/jpg") {
       throw new ValidationError("Photos must be JPEG");
     }
-    const buffer = new Uint8Array(await file.arrayBuffer());
-    if (!isJpeg(buffer)) {
+    const rawBuffer = new Uint8Array(await file.arrayBuffer());
+    if (!isJpeg(rawBuffer)) {
       throw new ValidationError("Photos must be JPEG");
     }
+    const buffer = stripJpegMetadata(rawBuffer);
 
     const original = form.get("original");
     let originalBuffer: Uint8Array | null = null;
@@ -309,10 +318,11 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
       if (original.size > MAX_ORIGINAL_BYTES) {
         throw new ValidationError("Original is too large");
       }
-      originalBuffer = new Uint8Array(await original.arrayBuffer());
-      if (!isJpeg(originalBuffer)) {
+      const rawOriginal = new Uint8Array(await original.arrayBuffer());
+      if (!isJpeg(rawOriginal)) {
         throw new ValidationError("Originals must be JPEG");
       }
+      originalBuffer = stripJpegMetadata(rawOriginal);
     }
 
     const requestedId = formString(form, "photo_id");
@@ -337,7 +347,7 @@ async function handlePhotos(req: Request, env: Env, tripId: string, photoId?: st
   return json(405, { error: "Method not allowed" });
 }
 
-export async function handleApiRequest(req: Request, env: Env): Promise<Response> {
+async function route(req: Request, env: Env): Promise<Response> {
   try {
     if (req.method === "OPTIONS") {
       return corsPreflight();
@@ -408,6 +418,10 @@ export async function handleApiRequest(req: Request, env: Env): Promise<Response
   } catch (err) {
     return errorResponse(err);
   }
+}
+
+export async function handleApiRequest(req: Request, env: Env): Promise<Response> {
+  return withApiHeaders(req, await route(req, env));
 }
 
 export const onRequest = async (context: {

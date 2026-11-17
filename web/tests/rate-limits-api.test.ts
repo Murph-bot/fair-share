@@ -7,6 +7,7 @@ import {
   TRIP_CREATES_PER_DAY,
   TRIP_CREATES_PER_HOUR,
 } from "../../pages/functions/_shared/rateLimit";
+import { plainJpeg } from "./helpers/jpeg";
 import { makeFakeEnv } from "./helpers/fakeEnv";
 import type { Env } from "../../pages/functions/_shared/env";
 
@@ -24,7 +25,7 @@ function uploadRequest(tripId: string, ip: string, token: string): Request {
   const form = new FormData();
   form.append(
     "photo",
-    new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "p.jpg", { type: "image/jpeg" }),
+    new File([plainJpeg()], "p.jpg", { type: "image/jpeg" }),
   );
   return new Request(`https://example.com/api/trips/${tripId}/photos`, {
     method: "POST",

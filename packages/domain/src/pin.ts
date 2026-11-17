@@ -86,14 +86,24 @@ export async function verifySessionToken(
   return timingSafeEqual(sig, expected);
 }
 
+export type PhotoVariant = "display" | "original";
+
+// The display message keeps its original shape so signed URLs issued before the
+// original variant existed stay valid. A display signature never verifies an original.
+function photoMessage(tripId: string, photoId: string, exp: number, variant: PhotoVariant): string {
+  const tag = variant === "original" ? "photo-original" : "photo";
+  return `${tag}:${tripId}:${photoId}:${exp}`;
+}
+
 export async function signPhotoAccess(
   tripId: string,
   photoId: string,
   pepper: string,
   nowSeconds = Math.floor(Date.now() / 1000),
+  variant: PhotoVariant = "display",
 ): Promise<{ exp: number; sig: string }> {
   const exp = nowSeconds + PHOTO_URL_TTL_SECONDS;
-  const sig = await hmacHex(pepper, `photo:${tripId}:${photoId}:${exp}`);
+  const sig = await hmacHex(pepper, photoMessage(tripId, photoId, exp, variant));
   return { exp, sig };
 }
 
@@ -104,12 +114,13 @@ export async function verifyPhotoAccess(
   expRaw: string,
   sig: string,
   nowSeconds = Math.floor(Date.now() / 1000),
+  variant: PhotoVariant = "display",
 ): Promise<boolean> {
   const exp = Number.parseInt(expRaw, 10);
   if (!Number.isFinite(exp) || exp < nowSeconds) {
     return false;
   }
-  const expected = await hmacHex(pepper, `photo:${tripId}:${photoId}:${exp}`);
+  const expected = await hmacHex(pepper, photoMessage(tripId, photoId, exp, variant));
   return timingSafeEqual(sig, expected);
 }
 
