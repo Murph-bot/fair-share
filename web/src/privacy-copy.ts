@@ -29,7 +29,7 @@ const en: PrivacyCopy = {
       heading: "What a trip stores",
       paragraphs: [
         "A trip stores its name, the people you add (whatever names you type), and each expense: what it was, who paid, the amount and who shared it. There are no accounts, email addresses or phone numbers.",
-        "If you add photos, a trip also stores a resized copy of each photo and a full-size original. Your browser re-encodes the resized copy. A JPEG original is uploaded unchanged, so it can carry what the camera wrote into it, such as the time and the GPS location (EXIF).",
+        "If you add photos, a trip also stores a resized copy of each photo and a full-size original. Your browser re-encodes the resized copy. Location data (GPS), camera details and the capture time (EXIF) are removed from photos uploaded from 17 November 2026; only the photo's orientation is kept. Photos uploaded before that date are unchanged, so they can still carry what the camera wrote into them, such as the time and the GPS location.",
         "Each trip gets a random 6-digit PIN for its photos. I store only a hash of it, not the PIN.",
         "Names you type may belong to other people. Add only what your group is fine with.",
       ],
@@ -79,7 +79,7 @@ const en: PrivacyCopy = {
     },
   ],
   complaintLead: "You can also complain to the Hellenic Data Protection Authority: ",
-  updated: "Last updated: 16 November 2026",
+  updated: "Last updated: 17 November 2026",
 };
 
 const el: PrivacyCopy = {
@@ -98,7 +98,7 @@ const el: PrivacyCopy = {
       heading: "Τι αποθηκεύει ένα ταξίδι",
       paragraphs: [
         "Ένα ταξίδι αποθηκεύει το όνομά του, τα άτομα που προσθέτεις (όποια ονόματα πληκτρολογήσεις) και κάθε έξοδο: τι ήταν, ποιος πλήρωσε, το ποσό και ποιοι το μοιράστηκαν. Δεν υπάρχουν λογαριασμοί, διευθύνσεις email ή τηλέφωνα.",
-        "Αν προσθέσεις φωτογραφίες, το ταξίδι αποθηκεύει επίσης ένα μικρότερο αντίγραφο κάθε φωτογραφίας και το πρωτότυπο σε πλήρες μέγεθος. Το μικρότερο αντίγραφο το επανακωδικοποιεί ο browser σου. Ένα πρωτότυπο JPEG ανεβαίνει αμετάβλητο, οπότε μπορεί να περιέχει όσα έγραψε η κάμερα μέσα του, όπως την ώρα και την τοποθεσία GPS (EXIF).",
+        "Αν προσθέσεις φωτογραφίες, το ταξίδι αποθηκεύει επίσης ένα μικρότερο αντίγραφο κάθε φωτογραφίας και το πρωτότυπο σε πλήρες μέγεθος. Το μικρότερο αντίγραφο το επανακωδικοποιεί ο browser σου. Τα δεδομένα τοποθεσίας (GPS), τα στοιχεία της κάμερας και η ώρα λήψης (EXIF) αφαιρούνται από τις φωτογραφίες που ανεβαίνουν από τις 17 Νοεμβρίου 2026· κρατιέται μόνο ο προσανατολισμός της φωτογραφίας. Οι φωτογραφίες που ανέβηκαν πριν από αυτή την ημερομηνία δεν έχουν αλλάξει, οπότε μπορεί ακόμη να περιέχουν όσα έγραψε η κάμερα μέσα τους, όπως την ώρα και την τοποθεσία GPS.",
         "Κάθε ταξίδι παίρνει ένα τυχαίο 6ψήφιο PIN για τις φωτογραφίες του. Αποθηκεύω μόνο ένα hash του, όχι το ίδιο το PIN.",
         "Τα ονόματα που πληκτρολογείς μπορεί να ανήκουν σε άλλους ανθρώπους. Πρόσθεσε μόνο ό,τι αποδέχεται η παρέα σου.",
       ],
@@ -148,7 +148,7 @@ const el: PrivacyCopy = {
     },
   ],
   complaintLead: "Μπορείς επίσης να υποβάλεις καταγγελία στην Αρχή Προστασίας Δεδομένων Προσωπικού Χαρακτήρα: ",
-  updated: "Τελευταία ενημέρωση: 16 Νοεμβρίου 2026",
+  updated: "Τελευταία ενημέρωση: 17 Νοεμβρίου 2026",
 };
 
 export const PRIVACY_COPY: Record<Language, PrivacyCopy> = { en, el };

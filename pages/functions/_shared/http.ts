@@ -5,24 +5,55 @@ import type { Env } from "./env";
 
 export const MAX_JSON_BYTES = 200_000;
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+// Browsers only need CORS from a page on another origin. The app calls its own origin, and the
+// mobile app is native, so it sends no Origin and ignores CORS. Anything else gets no ACAO header.
+const ALLOWED_ORIGINS: ReadonlySet<string> = new Set([
+  "https://fair-share-trips.pages.dev",
+  "https://pithelo.com",
+  "https://www.pithelo.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "http://localhost:8788",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:8788",
+]);
+
+// API and photo responses are never documents. Nothing may load from them or frame them.
+const API_SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+  "Referrer-Policy": "no-referrer",
 } as const;
 
-export function corsHeaders(): Record<string, string> {
-  return CORS_HEADERS;
+export function isAllowedOrigin(origin: string | null): origin is string {
+  return origin !== null && ALLOWED_ORIGINS.has(origin);
 }
 
 export function corsPreflight(): Response {
-  return new Response(null, { status: 204, headers: corsHeaders() });
+  return new Response(null, { status: 204 });
+}
+
+/** Adds the security headers and the origin-checked CORS headers to an API or photo response. */
+export function withApiHeaders(req: Request, response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(API_SECURITY_HEADERS)) {
+    headers.set(key, value);
+  }
+  headers.append("Vary", "Origin");
+  const origin = req.headers.get("Origin");
+  if (isAllowedOrigin(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
 export function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json; charset=utf-8", ...corsHeaders() },
+    headers: { "Content-Type": "application/json; charset=utf-8" },
   });
 }
 

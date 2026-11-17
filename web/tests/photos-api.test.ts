@@ -3,6 +3,7 @@ import { MAX_PHOTOS_PER_TRIP } from "@fairshare/domain/photos";
 import { createSessionToken, hashPin } from "@fairshare/domain/pin";
 import { deletePhoto, uploadPhoto } from "../src/api";
 import { handleApiRequest } from "../../pages/functions/api/[[path]]";
+import { plainJpeg, type Bytes } from "./helpers/jpeg";
 import { makeFakeEnv, TEST_PEPPER } from "./helpers/fakeEnv";
 import type { Env } from "../../pages/functions/_shared/env";
 
@@ -10,8 +11,8 @@ const validTripId = "11111111111111111111111111111111";
 const validPhotoId = "22222222222222222222222222222222";
 const otherPhotoId = "33333333333333333333333333333333";
 
-function fakeJpeg(bytes = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]): Blob {
-  return new Blob([new Uint8Array(bytes)], { type: "image/jpeg" });
+function fakeJpeg(bytes: Bytes = plainJpeg()): Blob {
+  return new Blob([bytes], { type: "image/jpeg" });
 }
 
 describe("DELETE /api/trips/:id/photos/:photoId", () => {
