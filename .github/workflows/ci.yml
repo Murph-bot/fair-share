@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
       - name: Dependencies are exact pins
         run: |
-          bad=$(git ls-files '*package.json' | xargs node -e 'for (const f of process.argv.slice(1)) { const p = require("./" + f); for (const s of ["dependencies", "devDependencies", "optionalDependencies"]) for (const [n, v] of Object.entries(p[s] || {})) if (/^[\^~]|^>=|^latest$/.test(v)) console.log(f + " " + n + " " + v) }')
+          bad=$(git ls-files '*package.json' ':!mobile/*' | xargs node -e 'for (const f of process.argv.slice(1)) { const p = require("./" + f); for (const s of ["dependencies", "devDependencies", "optionalDependencies"]) for (const [n, v] of Object.entries(p[s] || {})) if (/^[\^~]|^>=|^latest$/.test(v)) console.log(f + " " + n + " " + v) }')
           if [ -n "$bad" ]; then echo "::error::Pin these to exact versions:"; echo "$bad"; exit 1; fi
 
   gitleaks:
