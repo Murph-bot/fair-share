@@ -12,9 +12,9 @@
     "clean": "rm -rf web/dist .wrangler .netlify .ruff_cache .coverage '.coverage 2' mobile/.expo && rm -f tsconfig.tsbuildinfo"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2",
-    "playwright": "^1.63.0",
-    "typescript": "^5.9.3",
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3",
     "wrangler": "4.163.0"
   }
 }

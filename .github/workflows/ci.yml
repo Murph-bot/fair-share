@@ -54,3 +54,29 @@ jobs:
         run: npm --prefix mobile run test
       - name: Typecheck
         run: npm --prefix mobile run typecheck
+
+  exact-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dependencies are exact pins
+        run: |
+          bad=$(git ls-files '*package.json' ':!mobile/*' | xargs node -e 'for (const f of process.argv.slice(1)) { const p = require("./" + f); for (const s of ["dependencies", "devDependencies", "optionalDependencies"]) for (const [n, v] of Object.entries(p[s] || {})) if (/^[\^~]|^>=|^latest$/.test(v)) console.log(f + " " + n + " " + v) }')
+          if [ -n "$bad" ]; then echo "::error::Pin these to exact versions:"; echo "$bad"; exit 1; fi
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
