@@ -48,5 +48,6 @@ export function nextLanguage(): Language {
 export function languageButtonHtml(): string {
   const current = getLanguage();
   const next = getSupportedLanguages()[(getSupportedLanguages().indexOf(current) + 1) % getSupportedLanguages().length];
-  return `<button type="button" id="language-toggle" class="text-btn" aria-label="Switch language">${current.toUpperCase()} → ${next.toUpperCase()}</button>`;
+  const visible = `${current.toUpperCase()} → ${next.toUpperCase()}`;
+  return `<button type="button" id="language-toggle" class="text-btn" aria-label="${visible}, switch language">${visible}</button>`;
 }
