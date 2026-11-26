@@ -63,6 +63,8 @@ h3 { font-size: var(--t-l); }
 .mark { font-weight: 800; font-size: 26px; letter-spacing: -.02em; text-decoration: none; }
 .mark i { font-style: normal; color: var(--dot); }
 .mark small { font-weight: 600; font-size: var(--t-s); color: var(--acc); margin-left: var(--s2); letter-spacing: 0; }
+/* pithelo.com/fairshare injects data-pithelo-embed and its own wordmark; hide only this one. */
+[data-pithelo-embed] .mark { display: none; }
 .topbar h1 { font-size: var(--t-2xl); max-width: none; margin-top: var(--s3); overflow-wrap: anywhere; }
 .topbar-actions, .home-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); justify-content: flex-end; }
 
