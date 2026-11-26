@@ -25,12 +25,13 @@ import {
   type Trip,
 } from "@fairshare/domain";
 import { announce } from "../announce";
+import { finaleHtml } from "../finale";
 import { escapeHtml } from "../escape";
 import { isOffline, onOfflineChange } from "../offline";
 import { loadPhotoPin } from "../photo-session";
 import { rememberRecent } from "../recents";
 import { bindMoments, momentsSection } from "./moments";
-import { buildResult, formatMoney, initials, settleSentence, type Lang } from "../result";
+import { buildResult, formatMoney, settleSentence, type Lang } from "../result";
 import { settleDiagramSvg } from "../settle-diagram";
 import { getLanguage } from "../i18n";
 
@@ -79,7 +80,7 @@ function peopleList(trip: Trip): string {
   return `<ul class="people">${trip.people
     .map(
       (p, index) =>
-        `<li><span class="blob blob-${index % 4} fruit-${fruitClass(index)}" aria-hidden="true">${escapeHtml(initials(p))}</span><span class="person-name">${escapeHtml(p)}</span>` +
+        `<li><span class="person-name">${escapeHtml(p)}</span>` +
         ` <button type="button" class="text-btn" data-rename-person="${escapeHtml(p)}" aria-label="${t("Rename {{name}}", { name: escapeHtml(p) })}">${t("Rename")}</button>` +
         (index > 0 ? ` <button type="button" class="text-btn" data-move-person="${escapeHtml(p)}" data-direction="up" aria-label="${t("Move {{name}} up", { name: escapeHtml(p) })}">↑</button>` : "") +
         (index < trip.people.length - 1
@@ -88,11 +89,6 @@ function peopleList(trip: Trip): string {
         `</li>`,
     )
     .join("")}</ul>`;
-}
-
-const FRUIT_CLASSES = ["mango", "lagoon", "watermelon", "grape", "kiwi", "cobalt", "peach"];
-function fruitClass(index: number): string {
-  return FRUIT_CLASSES[index % FRUIT_CLASSES.length];
 }
 
 function lang(): Lang {
@@ -122,15 +118,18 @@ function resultCard(trip: Trip): string {
         `<div class="seg fruit-${seg.fruit}" style="flex:${seg.weight} 1 0" title="${escapeHtml(seg.name)} · ${seg.percent.toFixed(1)}%"><span aria-hidden="true">${escapeHtml(seg.initials)}</span></div>`,
     )
     .join("");
-  const barLabel = r.segments.map((seg) => `${seg.name} ${Math.round(seg.percent)}%`).join(", ");
+  const peak = Math.max(1, ...r.people.map((p) => Math.max(p.paidCents, p.shareCents)));
+  const scale = Math.ceil((peak * 1.05) / 5000) * 5000;
+  const pct = (cents: number) => Math.min(100, Math.max(0, (cents / scale) * 100)).toFixed(2);
   const rows = r.people
     .map((p) => {
       const word = p.status === "gets" ? t("gets back") : p.status === "owes" ? t("owes") : t("square");
       const sign = p.status === "gets" ? "+" : p.status === "owes" ? "\u2212" : "\u2713";
+      const label = `${p.name}: ${t("paid")} ${money(p.paidCents)}, ${t("SHARE").toLowerCase()} ${money(p.shareCents)}`;
       return `<li class="net-row ${p.status}">
-        <span class="blob blob-${p.shape} fruit-${p.fruit}${p.status === "square" && trip.expenses.length > 0 ? " squish" : ""}" aria-hidden="true">${escapeHtml(p.initials)}</span>
-        <span class="net-name"><strong>${escapeHtml(p.name)}</strong><span class="status-chip ${p.status}">${sign} ${word}</span></span>
-        <span class="net-amt num">${money(p.netCents, true)}</span>
+        <div class="net-top"><span class="net-name"><strong>${escapeHtml(p.name)}</strong><span class="status-chip ${p.status}">${sign} ${word}</span></span><span class="net-amt num">${money(p.netCents, true)}</span></div>
+        <div class="rule" role="img" aria-label="${escapeHtml(label)}" style="--v:${pct(p.paidCents)}%;--sv:${pct(p.shareCents)}%"><div class="ticks"></div><div class="ticks fine"></div><div class="line"></div><div class="fill"></div><div class="share"></div><div class="val"></div></div>
+        <p class="net-sub num">${t("paid")} ${money(p.paidCents)} · <span class="lc">${t("SHARE")}</span> ${money(p.shareCents)}</p>
       </li>`;
     })
     .join("");
@@ -147,9 +146,8 @@ function resultCard(trip: Trip): string {
       <p class="eyebrow">${t("Who owes what?")}</p>
       <h2 id="result-title" class="answer">${escapeHtml(headline)}</h2>
       ${formula ? `<p class="formula muted num">${escapeHtml(formula)}</p>` : ""}
-      ${n > 0 ? `<div class="even-bar num" role="img" aria-label="${escapeHtml(t("Even Bar: each person's share") + " — " + barLabel)}">${bar}</div>
+      ${n > 0 ? `<ul class="nets">${rows}</ul>
       <p class="muted small">${t("Even Bar · each person's share")}</p>` : ""}
-      ${n > 0 ? `<ul class="nets">${rows}</ul>` : ""}
       <h3 class="settle-title">${t("Who pays whom")}</h3>
       ${settleBlock(trip)}
       ${trip.expenses.length > 0 ? `<details class="receipt" id="receipt"><summary>${t("Show the math")}</summary>
@@ -506,7 +504,7 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
   root.innerHTML = `
     <header class="topbar">
       <div>
-        <p class="kicker"><a href="./"><img src="icon.svg" alt="" class="brand-mark">${t("Fair Share")}</a></p>
+        <p class="kicker"><a class="mark" href="./" aria-label="${t("Fair Share")}">pithelo<i>.</i><small>${t("Fair Share")}</small></a></p>
         <h1>${escapeHtml(trip.name)}</h1>
       </div>
       <div class="topbar-actions">
@@ -563,8 +561,8 @@ function paint(root: HTMLElement, id: string, trip: PublicTrip, editingId: strin
       <section class="block print-only" id="print-summary" aria-hidden="true">
         ${summaryHtml(trip)}
       </section>
-      <p class="muted footer-note"><a href="privacy">${t("Privacy")}</a></p>
     </main>
+    ${finaleHtml()}
   `;
 
   const banner = root.querySelector("#banner") as HTMLElement;

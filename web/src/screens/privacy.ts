@@ -1,4 +1,5 @@
 import { getLanguage, t } from "@fairshare/domain";
+import { finaleHtml } from "../finale";
 import { escapeHtml } from "../escape";
 import { PRIVACY_COPY, PRIVACY_DPA_URL, PRIVACY_EMAIL } from "../privacy-copy";
 
@@ -14,14 +15,15 @@ export function privacyHtml(): string {
     )
     .join("");
   return `
-    <main class="page home privacy">
-      <p class="kicker"><a href="./"><img src="icon.svg" alt="" class="brand-mark">${t("Fair Share")}</a></p>
+    <main class="page privacy">
+      <p class="kicker"><a class="mark" href="./" aria-label="${t("Fair Share")}">pithelo<i>.</i><small>${t("Fair Share")}</small></a></p>
       <h1>${escapeHtml(copy.title)}</h1>
       ${sections}
       <p class="footer-note">${escapeHtml(copy.complaintLead)}<a href="${PRIVACY_DPA_URL}" target="_blank" rel="noopener noreferrer">${PRIVACY_DPA_URL.replace("https://", "")}</a></p>
       <p class="muted footer-note">${escapeHtml(copy.updated)}</p>
       <p class="footer-note"><a href="./">${escapeHtml(copy.back)}</a></p>
     </main>
+    ${finaleHtml(false)}
   `;
 }
 

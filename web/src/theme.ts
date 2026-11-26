@@ -31,9 +31,9 @@ export function toggleTheme(): Theme {
   return next;
 }
 
-export function themeButtonHtml(label?: string): string {
-  const text = label ?? "Mode";
-  return `<button type="button" id="theme-toggle" class="text-btn" aria-label="Toggle dark mode">${text}</button>`;
+/** Dark mode is dropped in the Pithelo family look: the toggle is no longer rendered (callers null-check it). */
+export function themeButtonHtml(_label?: string): string {
+  return "";
 }
 
 export function nextLanguage(): Language {
