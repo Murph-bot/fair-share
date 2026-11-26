@@ -8,6 +8,7 @@ import {
 } from "../api";
 import { getInstallPrompt, isStandalone, runInstallPrompt } from "../install";
 import { backupJson, parseBackup, parseTrip, t, TRIP_ID_RE, TRIP_TEMPLATES } from "@fairshare/domain";
+import { finaleHtml } from "../finale";
 import { announce } from "../announce";
 import { escapeHtml } from "../escape";
 import { tripIdFromLink, tripLinkExample } from "../paths";
@@ -55,15 +56,18 @@ export function renderHome(root: HTMLElement): void {
   root.innerHTML = `
     <main class="page home">
       <div class="home-header">
-        <p class="kicker"><img src="icon.svg" alt="" class="brand-mark">${t("Fair Share")}</p>
+        <p class="kicker"><span class="mark">pithelo<i>.</i><small>${t("Fair Share")}</small></span></p>
         <div class="home-toggles">
           ${languageButtonHtml()}
           ${themeButtonHtml(themeLabel)}
         </div>
       </div>
-      <h1>${t("Who owes what after the trip?")}</h1>
-      <p class="lede">${t("Name it, add people, share the link. No accounts, no ads.")}</p>
-
+      <section class="hero">
+        <div>
+          <h1>${t("Who owes what after the trip?")}</h1>
+          <p class="lede">${t("Name it, add people, share the link. No accounts, no ads.")}</p>
+        </div>
+        <div class="hero-actions">
       <form id="create-form" class="stack">
         <label for="trip-name">${t("What's the trip called?")}</label>
         <input id="trip-name" name="name" type="text" required maxlength="80" autocomplete="off" placeholder="${t("Athens weekend")}">
@@ -88,6 +92,8 @@ export function renderHome(root: HTMLElement): void {
           ).join("")}
         </div>
         <p id="template-error" class="err" hidden></p>
+      </section>
+        </div>
       </section>
 
       <section class="block">
@@ -126,9 +132,9 @@ export function renderHome(root: HTMLElement): void {
 
       ${installBlock}
 
-      <p class="muted footer-note">${t("No accounts, no ads, no tracking. Your data lives on the trip link, and backups stay on this device.")}</p>
-      <p class="muted footer-note"><a href="privacy">${t("Privacy")}</a></p>
+      <p class="note">${t("No accounts, no ads, no tracking. Your data lives on the trip link, and backups stay on this device.")}</p>
     </main>
+    ${finaleHtml()}
   `;
 
   const form = root.querySelector("#create-form") as HTMLFormElement;
